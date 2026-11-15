@@ -1,23 +1,45 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, X } from "lucide-react";
-import { post, waitForJob, type Job } from "../api";
+import { activeJob, post, waitForJob, type Job } from "../api";
 
-/** Run a GPU job (image or video) and follow its progress. Returns the finished job (or throws). */
-export function useJob() {
+/** Run a job (image, video, transcribe…) and follow its progress. Returns the finished job (or throws).
+ *
+ * Jobs keep running in the app when you switch pages. When the page opens again, a job of this `kind` that is
+ * still going is picked up again (progress bar and all), and `onResumedEnd` gets it once it finishes. */
+export function useJob(kind?: string, onResumedEnd?: (final: Job) => void) {
   const [job, setJob] = useState<Job | null>(null);
   const [running, setRunning] = useState(false);
+  const alive = useRef(true);
+  const endRef = useRef(onResumedEnd);
+  endRef.current = onResumedEnd;
+
+  async function follow(j: Job): Promise<Job> {
+    setJob(j);
+    setRunning(true);
+    try {
+      return await waitForJob(j.id, setJob, () => alive.current);
+    } finally {
+      if (alive.current) setRunning(false);
+    }
+  }
+
+  useEffect(() => {
+    alive.current = true;
+    if (kind) {
+      activeJob([kind]).then((j) => {
+        if (j && alive.current) follow(j).then((f) => endRef.current?.(f)).catch(() => {});
+      });
+    }
+    return () => { alive.current = false; };
+  }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function run(path: string, body: unknown): Promise<Job> {
     setRunning(true);
-    try {
-      const j = await post<Job>(path, body);
-      setJob(j);
-      const final = await waitForJob(j.id, setJob);
-      if (final.status === "error") throw new Error(final.error || "Something went wrong");
-      return final;
-    } finally {
-      setRunning(false);
-    }
+    const j = await post<Job>(path, body).catch((e) => { setRunning(false); throw e; });
+    const final = await follow(j);
+    if (final.status === "error") throw new Error(final.error || "Something went wrong");
+    if (final.status === "cancelled") throw new Error("Cancelled");
+    return final;
   }
 
   const cancel = () => job && post(`/api/jobs/${job.id}/cancel`).catch(() => {});

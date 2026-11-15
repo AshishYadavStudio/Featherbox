@@ -543,7 +543,8 @@ def edit_scene(pid: str, index: int, req: SceneEdit) -> dict:
         raise HTTPException(404, "Unknown scene")
     job = jobs.submit("scene", f"Scene {index + 1}: {meta['script'].get('title', pid)[:40]}",
                       lambda j: t2s.regenerate_scene(j, pid, index, req.narration, req.image_prompt,
-                                                     req.new_image, req.new_voice, req.motion))
+                                                     req.new_image, req.new_voice, req.motion),
+                      ref=f"{pid}:{index}")
     return job.to_dict()
 
 
@@ -556,7 +557,7 @@ class MusicEdit(BaseModel):
 def edit_music(pid: str, req: MusicEdit) -> dict:
     meta = _project_or_404(pid)
     job = jobs.submit("music", f"Music: {meta['script'].get('title', pid)[:40]}",
-                      lambda j: t2s.set_music(j, pid, req.music, req.music_volume))
+                      lambda j: t2s.set_music(j, pid, req.music, req.music_volume), ref=f"{pid}:music")
     return job.to_dict()
 
 

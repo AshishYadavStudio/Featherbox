@@ -30,6 +30,7 @@ class Job:
     stage: str = "Waiting in queue"
     error: str | None = None
     result: Any = None
+    ref: str | None = None         # what the job works on (e.g. "<project>:<scene>"), so a page can find it again
     created: float = field(default_factory=time.time)
     finished: float | None = None
     _cancel: bool = False
@@ -52,7 +53,7 @@ class Job:
     def to_dict(self) -> dict:
         return {k: getattr(self, k) for k in
                 ("id", "kind", "title", "status", "progress", "stage", "error", "result",
-                 "created", "finished")}
+                 "ref", "created", "finished")}
 
 
 class JobManager:
@@ -63,8 +64,9 @@ class JobManager:
         threading.Thread(target=self._worker, args=(self._q, GPU_LOCK), daemon=True, name="job-worker").start()
         threading.Thread(target=self._worker, args=(self._cpu_q, None), daemon=True, name="cpu-job-worker").start()
 
-    def submit(self, kind: str, title: str, fn: Callable[[Job], Any], gpu: bool = True) -> Job:
-        job = Job(kind=kind, title=title, fn=fn)
+    def submit(self, kind: str, title: str, fn: Callable[[Job], Any], gpu: bool = True,
+               ref: str | None = None) -> Job:
+        job = Job(kind=kind, title=title, fn=fn, ref=ref)
         self.jobs[job.id] = job
         (self._q if gpu else self._cpu_q).put(job)
         return job

@@ -31,7 +31,7 @@ export type Catalog = {
 
 export type Job = {
   id: string; kind: string; title: string; status: "queued" | "running" | "done" | "error" | "cancelled";
-  progress: number; stage: string; error: string | null; result: any; created: number;
+  progress: number; stage: string; error: string | null; result: any; created: number; ref?: string | null;
 };
 
 export type Scene = { narration: string; image_prompt: string };
@@ -94,13 +94,26 @@ export async function api<T = any>(path: string, init?: RequestInit): Promise<T>
 export const post = <T = any>(path: string, body?: unknown) =>
   api<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
 
-export async function waitForJob(id: string, onUpdate: (j: Job) => void): Promise<Job> {
+/** Thrown by waitForJob when the page that was watching the job is closed (the job itself keeps running). */
+export class Detached extends Error {
+  constructor() { super("Detached"); this.name = "Detached"; }
+}
+
+/** Follow a job until it finishes. `watching` returning false (page left) stops following, not the job. */
+export async function waitForJob(id: string, onUpdate: (j: Job) => void, watching: () => boolean = () => true): Promise<Job> {
   for (;;) {
+    if (!watching()) throw new Detached();
     const j = await api<Job>(`/api/jobs/${id}`);
     onUpdate(j);
     if (j.status === "done" || j.status === "error" || j.status === "cancelled") return j;
     await new Promise((r) => setTimeout(r, 800));
   }
+}
+
+/** A job of these kinds that is still waiting or running, e.g. one started before you switched pages. */
+export async function activeJob(kinds: string[], match: (j: Job) => boolean = () => true): Promise<Job | null> {
+  const list = await api<Job[]>("/api/jobs").catch(() => [] as Job[]);
+  return list.find((j) => kinds.includes(j.kind) && (j.status === "queued" || j.status === "running") && match(j)) ?? null;
 }
 
 export const fmtMB = (bytes: number) =>

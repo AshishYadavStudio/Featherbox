@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, Loader2, Play, Plus, RefreshCw, Sparkles, Trash2, Volume2, Wand2, X } from "lucide-react";
-import { api, post, save, store, waitForJob, type Job, type Script, type SystemInfo, type Voice } from "../api";
+import { Detached, activeJob, api, post, save, store, waitForJob, type Job, type Script, type SystemInfo, type Voice } from "../api";
 import MusicPicker from "../components/MusicPicker";
 import ProjectView from "../components/ProjectView";
 
@@ -77,19 +77,23 @@ export default function Studio({ sys, goModels, goLibrary }: { sys: SystemInfo |
   const PART_NAMES: Record<string, string> = { llm: "a text model", image: "an image model", tts: "the voice model", ffmpeg: "the video encoder" };
   const missing = ready ? Object.entries(ready).filter(([, v]) => !v).map(([k]) => PART_NAMES[k] ?? k) : [];
 
-  async function runJob(path: string, body: unknown, running: Stage, onDone: (r: any) => void, fallback: Stage) {
-    setError(null);
+  // Stop following jobs when the page closes; the job itself keeps running and is picked up again below.
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+
+  async function follow(j: Job, running: Stage, onDone: (r: any) => void, fallback: Stage) {
     setStage(running);
+    setJob(j);
+    jobRef.current = j.id;
     try {
-      const j = await post<Job>(path, body);
-      jobRef.current = j.id;
-      const final = await waitForJob(j.id, setJob);
+      const final = await waitForJob(j.id, setJob, () => alive.current);
       if (final.status === "done") onDone(final.result);
       else {
         if (final.status === "error") setError(final.error);
         setStage(fallback);
       }
     } catch (e: any) {
+      if (e instanceof Detached) return;
       setError(e.message);
       setStage(fallback);
     } finally {
@@ -97,11 +101,33 @@ export default function Studio({ sys, goModels, goLibrary }: { sys: SystemInfo |
     }
   }
 
-  const writeScript = () =>
-    runJob("/api/studio/script", idea, "writing", (r: Script) => { setScript(r); setStage("edit"); }, script ? "edit" : "idea");
+  async function runJob(path: string, body: unknown, running: Stage, onDone: (r: any) => void, fallback: Stage) {
+    setError(null);
+    setStage(running);
+    try {
+      await follow(await post<Job>(path, body), running, onDone, fallback);
+    } catch (e: any) {
+      setError(e.message);
+      setStage(fallback);
+    }
+  }
+
+  const scriptDone = (r: Script) => { setScript(r); setStage("edit"); };
+  const renderDone = (r: any) => { setResult(r); setStage("done"); };
+
+  // Came back while a script or video is still being made? Show its progress again.
+  useEffect(() => {
+    activeJob(["script", "render"]).then((j) => {
+      if (!j || !alive.current) return;
+      if (j.kind === "script") follow(j, "writing", scriptDone, store<Script | null>("featherbox.script", null) ? "edit" : "idea");
+      else follow(j, "rendering", renderDone, "edit");
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const writeScript = () => runJob("/api/studio/script", idea, "writing", scriptDone, script ? "edit" : "idea");
 
   const render = () =>
-    script && runJob("/api/studio/render", { script, ...look, motion: sys?.video_ready ? look.motion : "still" }, "rendering", (r) => { setResult(r); setStage("done"); }, "edit");
+    script && runJob("/api/studio/render", { script, ...look, motion: sys?.video_ready ? look.motion : "still" }, "rendering", renderDone, "edit");
 
   const cancel = () => jobRef.current && post(`/api/jobs/${jobRef.current}/cancel`);
 

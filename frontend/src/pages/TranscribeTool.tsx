@@ -43,7 +43,12 @@ export default function TranscribeTool({ goModels }: { goModels: () => void }) {
   const [setup, setSetup] = useState<Catalog | null>(null);
   const [drag, setDrag] = useState(false);
   const file = useRef<HTMLInputElement>(null);
-  const { job, running, run, cancel } = useJob();
+  const { job, running, run, cancel } = useJob("transcribe", (f) => {
+    if (f.status === "error") setError(f.error);
+    const made = f.result?.items?.[0];
+    if (made) setOpenId(made.id);
+    load();
+  });
 
   const load = () => api<Creation[]>("/api/creations/transcript").then((l) => { setItems(l); return l; }).catch(() => [] as Creation[]);
   const loadOpts = () => api<TranscribeOptions>("/api/tools/transcribe/options").then(setOpts).catch((e) => setError(e.message));

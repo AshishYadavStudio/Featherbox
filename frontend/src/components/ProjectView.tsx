@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Clapperboard, Copy, FolderOpen, Image as ImageIcon, ImagePlus, Loader2, Mic, Music, Pause, Play, Wand2, X } from "lucide-react";
-import { api, post, waitForJob, type Job, type ProjectDetail } from "../api";
+import { Detached, activeJob, api, post, waitForJob, type Job, type ProjectDetail } from "../api";
 import MusicPicker from "./MusicPicker";
 
 type Busy = { target: number | "music"; job: Job | null };
@@ -29,22 +29,42 @@ export default function ProjectView({ pid, onLoaded, onEdit, onNew, goLibrary }:
       setError(e.message);
     }
   }
-  useEffect(() => { load(); return () => audio.current?.pause(); }, [pid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    load();
+    // a scene or music change still running from before you left this video: show its progress again
+    activeJob(["scene", "music"], (j) => !!j.ref?.startsWith(`${pid}:`)).then((j) => {
+      if (!j || !alive.current) return;
+      const part = j.ref!.slice(pid.length + 1);
+      follow(part === "music" ? "music" : Number(part), j);
+    });
+    return () => { alive.current = false; audio.current?.pause(); };
+  }, [pid]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function run(target: number | "music", path: string, body: unknown) {
-    setError(null);
-    setBusy({ target, job: null });
+  async function follow(target: number | "music", j: Job) {
+    setBusy({ target, job: j });
     try {
-      const j = await post<Job>(path, body);
-      const final = await waitForJob(j.id, (job) => setBusy({ target, job }));
+      const final = await waitForJob(j.id, (job) => setBusy({ target, job }), () => alive.current);
       if (final.status === "error") setError(final.error);
       if (final.status === "done" && typeof target === "number") {
         setDrafts(({ [target]: _, ...rest }) => rest);
       }
       await load();
     } catch (e: any) {
-      setError(e.message);
+      if (!(e instanceof Detached)) setError(e.message);
     } finally {
+      if (alive.current) setBusy(null);
+    }
+  }
+
+  async function run(target: number | "music", path: string, body: unknown) {
+    setError(null);
+    setBusy({ target, job: null });
+    try {
+      await follow(target, await post<Job>(path, body));
+    } catch (e: any) {
+      setError(e.message);
       setBusy(null);
     }
   }

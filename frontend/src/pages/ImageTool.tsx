@@ -21,7 +21,8 @@ export default function ImageTool({ goModels, onAnimate, canAnimate }: {
   const [items, setItems] = useState<Creation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Creation | null>(null);
-  const { job, running, run, cancel } = useJob();
+  // a job started before you left this page is picked up again; its pictures appear when it finishes
+  const { job, running, run, cancel } = useJob("image", (f) => { if (f.status === "error") setError(f.error); load(); });
 
   const load = () => api<Creation[]>("/api/creations/image").then(setItems).catch(() => {});
   useEffect(() => {

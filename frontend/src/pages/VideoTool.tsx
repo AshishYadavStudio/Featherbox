@@ -19,7 +19,7 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
   const [uploading, setUploading] = useState(false);
   const [quality, setQuality] = useState("fast");
   const file = useRef<HTMLInputElement>(null);
-  const { job, running, run, cancel } = useJob();
+  const { job, running, run, cancel } = useJob("video", (f) => { if (f.status === "error") setError(f.error); load(); });
 
   const load = () => api<Creation[]>("/api/creations/video").then(setItems).catch(() => {});
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Eraser, Send, Square } from "lucide-react";
 import { api, save, store, type Component, type SystemInfo } from "../api";
 
@@ -10,18 +10,32 @@ const STARTERS = [
   "Suggest 5 catchy titles for a video about Indian street food",
 ];
 
+// The conversation lives outside the page, so an answer keeps streaming in while you use another page.
+const chat = {
+  msgs: store<Msg[]>("featherbox.chat", []),
+  busy: false,
+  ctrl: null as AbortController | null,
+  listeners: new Set<() => void>(),
+};
+function setChat(patch: Partial<Pick<typeof chat, "msgs" | "busy" | "ctrl">>) {
+  Object.assign(chat, patch);
+  if (patch.msgs) save("featherbox.chat", chat.msgs.slice(-60));
+  chat.listeners.forEach((f) => f());
+}
+const setMsgs = (msgs: Msg[]) => setChat({ msgs });
+
 export default function Chat({ sys, goModels }: { sys: SystemInfo | null; goModels: () => void }) {
-  const [msgs, setMsgs] = useState<Msg[]>(() => store<Msg[]>("featherbox.chat", []));
+  const [, rerender] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => { chat.listeners.add(rerender); return () => { chat.listeners.delete(rerender); }; }, []);
+  const { msgs, busy } = chat;
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
   const [models, setModels] = useState<Component[]>([]);
   const [model, setModel] = useState<string>(() => store("featherbox.chatModel", ""));
-  const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => save("featherbox.chat", msgs.slice(-60)), [msgs]);
   useEffect(() => save("featherbox.chatModel", model), [model]);
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [msgs]);
+  // braces matter: newer browsers return a Promise from scrollIntoView, which React would call as a cleanup
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
   useEffect(() => {
     api<{ components: Component[] }>("/api/catalog").then((r) =>
       setModels(r.components.filter((c) => c.kind === "model" && c.category === "llm" && c.installed))).catch(() => {});
@@ -32,9 +46,8 @@ export default function Chat({ sys, goModels }: { sys: SystemInfo | null; goMode
     const history: Msg[] = [...msgs, { role: "user", content: text.trim() }];
     setMsgs([...history, { role: "assistant", content: "" }]);
     setInput("");
-    setBusy(true);
     const ctrl = new AbortController();
-    abortRef.current = ctrl;
+    setChat({ busy: true, ctrl });
     try {
       const r = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" }, signal: ctrl.signal,
@@ -59,8 +72,7 @@ export default function Chat({ sys, goModels }: { sys: SystemInfo | null; goMode
     } catch (e: any) {
       if (e.name !== "AbortError") setMsgs([...history, { role: "assistant", content: `⚠️ ${e.message}` }]);
     } finally {
-      setBusy(false);
-      abortRef.current = null;
+      setChat({ busy: false, ctrl: null });
     }
   }
 
@@ -111,7 +123,7 @@ export default function Chat({ sys, goModels }: { sys: SystemInfo | null; goMode
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
         />
         {busy ? (
-          <button type="button" className="btn" onClick={() => abortRef.current?.abort()}><Square size={16} /> Stop</button>
+          <button type="button" className="btn" onClick={() => chat.ctrl?.abort()}><Square size={16} /> Stop</button>
         ) : (
           <button type="submit" className="btn primary" disabled={!input.trim()}><Send size={16} /></button>
         )}
