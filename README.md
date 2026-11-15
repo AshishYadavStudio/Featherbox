@@ -1,6 +1,6 @@
 # Featherbox
 
-**Local AI, light on your PC.** One app that downloads and runs text, image, video and voice AI models
+**Local AI, light on your PC.** One app that downloads and runs text, image, video, voice and speech-to-text AI models
 entirely on your own computer: no cloud, no account, no subscription. It's built for ordinary laptops
 with 4–6 GB graphics cards (and works on CPU-only PCs, more slowly).
 
@@ -11,6 +11,8 @@ with 4–6 GB graphics cards (and works on CPU-only PCs, more slowly).
   script, voiceover, AI pictures or AI motion, captions and music.
 - **Image**, **Video** and **Voice** tools: make a picture, a short AI clip (from text or from a picture)
   or a voice recording directly, with any installed model.
+- **Transcribe**: turn a recording, a voice note or a video into text and subtitles (SRT/VTT) with
+  Whisper, in 99 languages including Hindi.
 
 ## Install (for users)
 
@@ -71,6 +73,7 @@ React UI (frontend/)  ──HTTP──▶  FastAPI backend (backend/app)
                                    │   ├─ llm.py        llama.cpp `llama-server` (script writing, chat)
                                    │   ├─ image.py      stable-diffusion.cpp CLI (scene images)
                                    │   ├─ tts.py        Kokoro ONNX on CPU (voiceover, EN + HI)
+                                   │   ├─ stt.py        whisper.cpp `whisper-cli` (speech to text, CPU or CUDA)
                                    │   ├─ textrender.py HarfBuzz-shaped captions (Hindi renders correctly)
                                    │   ├─ music.py      built-in music moods (synthesised, no download) + your tracks
                                    │   └─ video.py      FFmpeg: Ken Burns motion, captions, concat, music ducking
@@ -129,6 +132,35 @@ native pixel count (Z-Image: 576×1024, 768×768, 1024×576; Wan: 480×832, 640�
 program is holding the graphics memory, the error names it (e.g. "python.exe in D:\Tools\TTS") instead of
 showing raw engine output.
 
+## Transcribe (speech to text)
+
+**Transcribe** turns a file (MP3, WAV, M4A, OGG, FLAC, or a video such as MP4/MKV/MOV) or a microphone recording
+into text with timestamps. Click a line to play from there; copy the text or download TXT, SRT or VTT
+subtitles. Results are saved in `data\creations\transcript\`.
+
+- **Models** (Models → Speech to text), all from whisper.cpp, quantised:
+
+  | Model | Size | Best for |
+  |---|---|---|
+  | Whisper Base | 57 MB | Quick drafts of clear English |
+  | Whisper Small | 181 MB | Balance; can translate to English |
+  | **Whisper Large v3 Turbo** (recommended) | 547 MB | Near-best accuracy, Hindi and Indian languages |
+  | Whisper Large v3 | 1 GB | Most accurate, best translation to English |
+
+- **Engines**: `whisper.cpp (CPU)` (9 MB) runs anywhere, in its own queue, so it never waits behind an image or
+  video job. On NVIDIA PCs, `whisper.cpp (NVIDIA CUDA)` is far faster. Only the needed files (258 MB) are pulled
+  out of the 685 MB release zip with HTTP range requests, and it reuses the CUDA runtime that the llama.cpp
+  engine already installed. If the GPU run fails (for example, graphics memory is full), it falls back to the CPU.
+- A tiny Silero voice-activity model (1 MB) skips silence, which stops Whisper inventing text in quiet parts.
+- Speed for 107 s of speech (Ryzen 7 5800H / RTX 3050 4 GB):
+
+  | | CPU | NVIDIA GPU |
+  |---|---|---|
+  | Whisper Base | 10 s | — |
+  | Whisper Large v3 Turbo | 64 s | **8 s** |
+
+  "Detect automatically" costs one extra pass (about 13 s on the CPU), so picking the language is quicker.
+
 ## AI motion (optional video models)
 
 With a Wan video model installed (Models → Video), scenes can move instead of using a slow zoom and pan:
@@ -181,6 +213,7 @@ still works).
 | DreamShaper XL Lightning | OpenRAIL++ |
 | Z-Image Turbo, FLUX.1 schnell, Wan 2.1 / 2.2 | Apache-2.0 |
 | Kokoro TTS | Apache-2.0 |
+| whisper.cpp, Whisper models (OpenAI), Silero VAD | MIT |
 | FFmpeg (BtbN GPL build) | GPL |
 
 Check each license before selling the app or using generated content commercially.
@@ -199,5 +232,5 @@ Check each license before selling the app or using generated content commerciall
 - [x] AI motion with Wan video models (whole video, first scene, or single scenes)
 - [ ] Piper voices for more Indian languages
 - [x] Standalone tools: image generator, video generator, text-to-speech
-- [ ] Speech-to-text (whisper.cpp)
+- [x] Speech-to-text (whisper.cpp): files, videos and microphone, SRT/VTT subtitles, CPU or CUDA
 - [ ] Hugging Face model search inside the Models page

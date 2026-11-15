@@ -23,6 +23,7 @@ from .engines import music
 from .engines.image import image_engine, video_engine
 from .engines.llm import llm
 from .engines.tts import tts
+from .engines.stt import LANGUAGES as STT_LANGUAGES, stt
 from .jobs import GPU_LOCK, jobs
 from .recipes import topic_to_short as t2s
 from . import tools
@@ -84,6 +85,7 @@ class SettingsPatch(BaseModel):
     video_model: str | None = None
     video_quality: str | None = Field(None, pattern="^(fast|best)$")
     voice: str | None = None
+    stt_model: str | None = None
 
 
 @app.patch("/api/settings")
@@ -118,7 +120,8 @@ def get_catalog() -> dict:
     hw = hardware.detect()
     return {"components": [_component(c, hw) for c in catalog.components()],
             "recommended": catalog.recommended_set(hw),
-            "active": {"llm": _active(llm), "image": _active(image_engine), "video": _active(video_engine)},
+            "active": {"llm": _active(llm), "image": _active(image_engine), "video": _active(video_engine),
+                       "stt": _active(stt)},
             "custom_kinds": {k: v[0] for k, v in catalog.CUSTOM_KINDS.items()}}
 
 
@@ -319,6 +322,49 @@ def tool_voice(req: VoiceRequest) -> dict:
         return tools.make_voice(req.text, req.voice, req.speed)
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(409, str(exc))
+
+
+@app.get("/api/tools/transcribe/options")
+def transcribe_options() -> dict:
+    hw = hardware.detect()
+    gpu = stt.uses_gpu()
+    engine = gpu or catalog.get("whisper-cpu").is_installed()
+    return {"engine": engine, "ffmpeg": catalog.get("ffmpeg").is_installed(),
+            "models": [{"id": c.id, "name": c.name, "translates": c.id != "stt-whisper-turbo",
+                        "rtf": catalog.stt_rtf(c, hw, gpu)} for c in catalog.installed("stt")],
+            "active": _active(stt), "languages": STT_LANGUAGES,
+            "setup": [c.id for c in (catalog.get("whisper-cuda" if hw["backend"] == "cuda" else "whisper-cpu"),
+                                     catalog.get("stt-whisper-turbo")) if not c.is_installed()],
+            "gpu": gpu, "gpu_engine_available": hw["backend"] == "cuda" and not gpu}
+
+
+@app.post("/api/creations/media")
+async def upload_media(request: Request, name: str = "Recording") -> dict:
+    """An audio/video file (or a microphone recording) to transcribe. Streamed to disk."""
+    try:
+        return await tools.save_media_upload(request.stream(), name)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+class TranscribeRequest(BaseModel):
+    media: str = Field(max_length=100)
+    title: str = Field("", max_length=200)
+    model: str | None = None
+    language: str = "auto"
+    translate: bool = False
+    prompt: str = Field("", max_length=500)
+
+
+@app.post("/api/tools/transcribe")
+def tool_transcribe(req: TranscribeRequest) -> dict:
+    """On the CPU engine this runs in its own queue, so it never waits behind an image or video job."""
+    if not catalog.installed("stt"):
+        raise HTTPException(409, "No speech-to-text model installed. Open Models → Speech to text.")
+    job = jobs.submit("transcribe", f"Transcribe: {req.title[:50]}",
+                      lambda j: tools.make_transcript(j, req.media, req.title, req.model, req.language,
+                                                      req.translate, req.prompt), gpu=stt.uses_gpu())
+    return job.to_dict()
 
 
 @app.get("/api/creations/{kind}")
@@ -553,4 +599,5 @@ if config.FRONTEND_DIST.exists():
         f = config.FRONTEND_DIST / path
         if path and f.is_file():
             return FileResponse(f)
-        return FileResponse(config.FRONTEND_DIST / "index.html")
+        # always revalidate the page itself, so an updated app never runs an old cached build
+        return FileResponse(config.FRONTEND_DIST / "index.html", headers={"Cache-Control": "no-cache"})

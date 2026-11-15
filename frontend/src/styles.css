@@ -367,3 +367,23 @@ details.adv[open] summary::before { transform: rotate(90deg); }
   .tool { grid-template-columns: 1fr; }
   .tool-form { position: static; }
 }
+
+/* ---------- Transcribe ---------- */
+.dropzone { border: 1.5px dashed var(--line); border-radius: 12px; padding: 18px 12px; display: grid; gap: 10px;
+  justify-items: center; text-align: center; background: var(--bg-2); }
+.dropzone.over { border-color: var(--accent); background: var(--accent-soft); }
+.dropzone.recording { grid-auto-flow: column; justify-content: center; align-items: center; gap: 12px; font-variant-numeric: tabular-nums; }
+.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+.source { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-2); }
+.source .small { display: inline-flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.source audio, .transcript audio { width: 100%; }
+.transcript-row { text-align: left; cursor: pointer; display: grid; gap: 4px; font: inherit; color: inherit; }
+.transcript-row:hover { border-color: var(--accent); }
+.transcript { display: grid; gap: 10px; }
+.segments { max-height: 420px; overflow-y: auto; display: grid; gap: 2px; padding-right: 4px; }
+.seg { display: grid; grid-template-columns: 52px 1fr; gap: 10px; text-align: left; background: none; border: 0;
+  padding: 6px 8px; border-radius: 8px; color: var(--text); font: inherit; font-size: 14px; line-height: 1.5; cursor: pointer; }
+.seg:hover { background: var(--card-2); }
+.seg.on { background: var(--accent-soft); }
+.seg time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 2px; }

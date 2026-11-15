@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AudioLines, Clapperboard, Cpu, Feather, Film, HardDriveDownload, Image as ImageIcon, LibraryBig, MessageSquare } from "lucide-react";
+import { AudioLines, Clapperboard, Cpu, Feather, Film, HardDriveDownload, Image as ImageIcon, LibraryBig, MessageSquare, ScrollText } from "lucide-react";
 import { api, store, save, type SystemInfo } from "./api";
 import Studio from "./pages/Studio";
 import Models from "./pages/Models";
@@ -8,14 +8,16 @@ import Library from "./pages/Library";
 import ImageTool from "./pages/ImageTool";
 import VideoTool from "./pages/VideoTool";
 import VoiceTool from "./pages/VoiceTool";
+import TranscribeTool from "./pages/TranscribeTool";
 
-export type Page = "studio" | "image" | "video" | "voice" | "chat" | "library" | "models";
+export type Page = "studio" | "image" | "video" | "voice" | "transcribe" | "chat" | "library" | "models";
 
 const NAV: { id: Page; label: string; icon: typeof Clapperboard }[] = [
   { id: "studio", label: "Studio", icon: Clapperboard },
   { id: "image", label: "Image", icon: ImageIcon },
   { id: "video", label: "Video", icon: Film },
   { id: "voice", label: "Voice", icon: AudioLines },
+  { id: "transcribe", label: "Transcribe", icon: ScrollText },
   { id: "library", label: "Library", icon: LibraryBig },
   { id: "chat", label: "Chat", icon: MessageSquare },
   { id: "models", label: "Models", icon: HardDriveDownload },
@@ -90,6 +92,7 @@ export default function App() {
           onAnimate={(ref) => { save("featherbox.videoStart", ref); setPage("video"); }} />}
         {page === "video" && <VideoTool goModels={() => setPage("models")} />}
         {page === "voice" && <VoiceTool goModels={() => setPage("models")} />}
+        {page === "transcribe" && <TranscribeTool goModels={() => setPage("models")} />}
         {page === "library" && <Library goStudio={() => setPage("studio")} openProject={openProject} />}
         {page === "chat" && <Chat sys={sys} goModels={() => setPage("models")} />}
         {page === "models" && <Models sys={sys} />}

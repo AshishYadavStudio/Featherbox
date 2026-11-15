@@ -26,7 +26,7 @@ export type Component = {
 };
 export type Catalog = {
   components: Component[]; recommended: string[];
-  active: { llm: string | null; image: string | null; video: string | null }; custom_kinds: Record<string, string>;
+  active: { llm: string | null; image: string | null; video: string | null; stt: string | null }; custom_kinds: Record<string, string>;
 };
 
 export type Job = {
@@ -58,10 +58,17 @@ export type ProjectDetail = {
 };
 export type MusicOption = { id: string; label: string };
 export type Creation = {
-  id: string; kind: "image" | "video" | "voice"; url: string; thumb?: string; created: number; seconds?: number;
+  id: string; kind: "image" | "video" | "voice" | "transcript"; url: string; thumb?: string; created: number; seconds?: number;
   prompt?: string; negative?: string; style?: string; aspect?: string; model?: string; model_name?: string;
   seed?: number; width?: number; height?: number; image?: string | null; duration?: number; quality?: string;
   text?: string; voice?: string; voice_name?: string; speed?: number;
+  title?: string; segments?: Segment[]; language?: string; spoken?: string; language_name?: string; translate?: boolean;
+  words?: number; audio?: string; srt?: string; vtt?: string;
+};
+export type Segment = { start: number; end: number; text: string };
+export type TranscribeOptions = {
+  engine: boolean; ffmpeg: boolean; models: { id: string; name: string; translates: boolean; rtf: number | null }[];
+  active: string | null; languages: Record<string, string>; setup: string[]; gpu: boolean; gpu_engine_available: boolean;
 };
 export type ToolModel = { id: string; name: string; i2v: boolean; arch: string | null };
 export type ToolOptions = {

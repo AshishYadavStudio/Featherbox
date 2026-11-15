@@ -24,9 +24,11 @@ export function useJob() {
   return { job, running, run, cancel };
 }
 
-export function JobProgress({ job, onCancel }: { job: Job | null; onCancel: () => void }) {
+export function JobProgress({ job, onCancel, queued = "Waiting for the GPU (another job is running)…" }: {
+  job: Job | null; onCancel: () => void; queued?: string;
+}) {
   const pct = job ? Math.round(job.progress * 100) : 0;
-  const stage = !job ? "Starting…" : job.status === "queued" ? "Waiting for the GPU (another job is running)…" : job.stage;
+  const stage = !job ? "Starting…" : job.status === "queued" ? queued : job.stage;
   return (
     <div className="tool-progress">
       <div className="row between">

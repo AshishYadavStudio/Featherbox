@@ -13,12 +13,13 @@ const FIT: Record<string, [string, string]> = {
   soon: ["Coming soon", "dim"],
 };
 
-type Tab = "llm" | "image" | "video" | "tts" | "music" | "engine";
+type Tab = "llm" | "image" | "video" | "tts" | "stt" | "music" | "engine";
 const TABS: { id: Tab; label: string; blurb: string }[] = [
   { id: "llm", label: "Text", blurb: "Writes your scripts, titles and captions, and powers Chat." },
   { id: "image", label: "Image", blurb: "Paints a picture for every scene." },
   { id: "video", label: "Video", blurb: "Brings scenes to life with short AI motion clips (optional)." },
   { id: "tts", label: "Voice", blurb: "Reads the script aloud as the voiceover." },
+  { id: "stt", label: "Speech to text", blurb: "Writes down what is said in a recording or video (Transcribe page)." },
   { id: "music", label: "Music", blurb: "Background music under the voice." },
   { id: "engine", label: "Engines", blurb: "The programs that run the models on your CPU or GPU." },
 ];
@@ -50,7 +51,7 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
   if (tab === "engine" && !showAllEngines) list = list.filter((c) => c.fit !== "other-backend" || c.installed);
   if (onlyGood && tab !== "engine") list = list.filter((c) => c.installed || ["great", "recommended"].includes(c.fit));
   const meta = TABS.find((t) => t.id === tab)!;
-  const inUse = tab === "llm" || tab === "image" || tab === "video" ? cat?.active[tab] : null;
+  const inUse = tab === "llm" || tab === "image" || tab === "video" || tab === "stt" ? cat?.active[tab] : null;
   const inUseName = items.find((c) => c.id === inUse)?.name;
 
   return (
@@ -124,13 +125,17 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
             <h3>{meta.label} models</h3>
             <p className="muted small">{meta.blurb}</p>
           </div>
-          {inUseName && <span className="badge ok"><Check size={12} /> Studio uses: {inUseName}</span>}
+          {inUseName && <span className="badge ok"><Check size={12} /> {tab === "stt" ? "Transcribe uses" : "Studio uses"}: {inUseName}</span>}
           {tab === "engine" && (
             <button className="btn ghost small" onClick={() => setShowAllEngines((v) => !v)}>{showAllEngines ? "Hide other hardware" : "Show all engines"}</button>
           )}
         </div>
         {tab === "video" && (
           <div className="banner"><span>Video models add <b>AI motion</b> to scenes: pick "AI motion" under Motion in the Studio, or press Animate on any scene of a finished video. They are optional; without one, scenes use a slow zoom and pan.</span></div>
+        )}
+        {tab === "stt" && !items.find((c) => c.id === "whisper-cpu")?.installed && (
+          <div className="banner"><span>These models need the <b>whisper.cpp</b> engine (9 MB, runs on the CPU).</span>
+            <button className="btn small" onClick={() => act(() => post("/api/catalog/whisper-cpu/install"))}><Download size={14} /> Get engine</button></div>
         )}
         {tab === "music" && (
           <div className="banner"><span>The 5 built-in music moods (Calm, Uplifting, Playful, Mysterious, Epic) are always available and need no download. You can also add your own tracks in the Studio.</span></div>
@@ -162,9 +167,9 @@ function ModelRow({ c, recommended, inUse, act }: {
   const busy = d && ["queued", "downloading", "extracting"].includes(d.status);
   const pct = d && d.total ? Math.min(100, (d.done / d.total) * 100) : 0;
   const [fitText, fitTone] = FIT[c.fit] ?? [c.fit, "dim"];
-  const selectable = c.kind === "model" && c.studio && ["llm", "image", "video"].includes(c.category);
+  const selectable = c.kind === "model" && c.studio && ["llm", "image", "video", "stt"].includes(c.category);
   const shared = !c.installed && c.download_mb < c.size_mb;
-  const settingKey = c.category === "llm" ? "llm_model" : c.category === "video" ? "video_model" : "image_model";
+  const settingKey = ({ llm: "llm_model", video: "video_model", stt: "stt_model" } as Record<string, string>)[c.category] ?? "image_model";
   return (
     <div className={`model card ${c.installed ? "installed" : ""} ${c.soon ? "soon" : ""}`}>
       <div className="model-info">

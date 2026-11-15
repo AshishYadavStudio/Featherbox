@@ -1,4 +1,5 @@
-"""Background job queue. Jobs run one at a time because they share the GPU."""
+"""Background job queues. GPU jobs run one at a time because they share the graphics card; CPU jobs
+(speech-to-text) have their own queue so they never wait behind a long video render."""
 from __future__ import annotations
 
 import queue
@@ -58,12 +59,14 @@ class JobManager:
     def __init__(self) -> None:
         self.jobs: dict[str, Job] = {}
         self._q: queue.Queue[Job] = queue.Queue()
-        threading.Thread(target=self._worker, daemon=True, name="job-worker").start()
+        self._cpu_q: queue.Queue[Job] = queue.Queue()
+        threading.Thread(target=self._worker, args=(self._q, GPU_LOCK), daemon=True, name="job-worker").start()
+        threading.Thread(target=self._worker, args=(self._cpu_q, None), daemon=True, name="cpu-job-worker").start()
 
-    def submit(self, kind: str, title: str, fn: Callable[[Job], Any]) -> Job:
+    def submit(self, kind: str, title: str, fn: Callable[[Job], Any], gpu: bool = True) -> Job:
         job = Job(kind=kind, title=title, fn=fn)
         self.jobs[job.id] = job
-        self._q.put(job)
+        (self._q if gpu else self._cpu_q).put(job)
         return job
 
     def cancel(self, job_id: str) -> None:
@@ -72,15 +75,18 @@ class JobManager:
         if job.status == "queued":
             job.status, job.stage, job.finished = "cancelled", "Cancelled", time.time()
 
-    def _worker(self) -> None:
+    def _worker(self, q: "queue.Queue[Job]", lock: threading.Lock | None) -> None:
         while True:
-            job = self._q.get()
+            job = q.get()
             if job.status == "cancelled":
                 continue
             job.status, job.stage = "running", "Starting"
             try:
-                with GPU_LOCK:
+                if lock is None:
                     job.result = job.fn(job)
+                else:
+                    with lock:
+                        job.result = job.fn(job)
                 job.status, job.progress, job.stage = "done", 1.0, "Done"
             except Cancelled:
                 job.status, job.stage = "cancelled", "Cancelled"

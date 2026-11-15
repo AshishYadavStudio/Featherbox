@@ -1,6 +1,7 @@
 """Resumable downloader that installs catalog components."""
 from __future__ import annotations
 
+import io
 import shutil
 import threading
 import time
@@ -57,10 +58,15 @@ class DownloadManager:
 
     # ------------------------------------------------------------------
     def _run(self, comp: Component, t: dict) -> None:
-        sizes = [f.size_mb * 1024 * 1024 for f in comp.files]
+        from .catalog import shared_paths_in_use
+        have = shared_paths_in_use(comp)   # already installed by another component (e.g. the CUDA runtime)
+        sizes = [0 if f.dest in have else f.size_mb * 1024 * 1024 for f in comp.files]
+        t["total"] = sum(sizes)
         try:
             t["status"] = "downloading"
             for i, f in enumerate(comp.files):
+                if f.dest in have:
+                    continue
                 dest = config.DATA / f.dest
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 t["file"] = Path(f.dest).name
@@ -70,6 +76,12 @@ class DownloadManager:
                     sizes[i] = n
                     t["total"] = sum(sizes)
 
+                if f.members:
+                    out = config.DATA / f.extract_to
+                    if not out.exists():
+                        self._fetch_members(f.url, f.members, out, t, base, on_total)
+                    t["done"] = sum(sizes[: i + 1])
+                    continue
                 if not dest.exists():
                     self._fetch(f.url, dest, t, base, on_total)
                 else:
@@ -90,6 +102,26 @@ class DownloadManager:
             t["status"] = "cancelled"
         except Exception as exc:
             t["status"], t["error"] = "error", f"{type(exc).__name__}: {exc}"
+
+    def _fetch_members(self, url: str, members: tuple[str, ...], out: Path, t: dict, base: int, on_total) -> None:
+        """Pull only some files out of a big remote zip, reading it with HTTP range requests."""
+        import fnmatch
+        tmp = out.with_name(out.name + ".part")
+        shutil.rmtree(tmp, ignore_errors=True)
+        with httpx.Client(headers=_UA, follow_redirects=True, timeout=httpx.Timeout(30.0, read=120.0)) as client:
+            remote = _RemoteFile(client, url, t)
+            with zipfile.ZipFile(io.BufferedReader(remote, 8 << 20)) as zf:
+                wanted = [i for i in zf.infolist() if not i.is_dir() and any(
+                    fnmatch.fnmatch(Path(i.filename).name, m) for m in members)]
+                total = sum(i.compress_size for i in wanted)
+                on_total(total)
+                remote.base, remote.count = base, True
+                for info in wanted:
+                    target = tmp / Path(info.filename).name
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with zf.open(info) as src, open(target, "wb") as dst:
+                        shutil.copyfileobj(src, dst, 1 << 20)
+        tmp.replace(out)
 
     def _fetch(self, url: str, dest: Path, t: dict, base: int, on_total) -> None:
         part = dest.with_name(dest.name + ".part")
@@ -122,6 +154,59 @@ class DownloadManager:
                         t["speed"] = inst if not t["speed"] else 0.7 * t["speed"] + 0.3 * inst
                         last_t, last_b = now, got
         part.replace(dest)
+
+
+class _RemoteFile(io.RawIOBase):
+    """A seekable read-only view of a URL (HTTP range requests), enough for zipfile."""
+
+    def __init__(self, client: httpx.Client, url: str, t: dict) -> None:
+        self.client, self.t, self.pos = client, t, 0
+        self.base, self.got, self.count, self._last = 0, 0, False, (time.time(), 0)
+        r = client.get(url, headers={"Range": "bytes=0-0"})
+        r.raise_for_status()
+        self.url = str(r.url)
+        self.size = int(r.headers["content-range"].rsplit("/", 1)[1])
+
+    def readable(self) -> bool:
+        return True
+
+    def seekable(self) -> bool:
+        return True
+
+    def tell(self) -> int:
+        return self.pos
+
+    def seek(self, off: int, whence: int = 0) -> int:
+        self.pos = off if whence == 0 else self.pos + off if whence == 1 else self.size + off
+        return self.pos
+
+    def readinto(self, b) -> int:
+        if self.t["cancel"]:
+            raise _Cancelled()
+        n = min(len(b), self.size - self.pos, 4 << 20)
+        if n <= 0:
+            return 0
+        for attempt in range(4):
+            try:
+                r = self.client.get(self.url, headers={"Range": f"bytes={self.pos}-{self.pos + n - 1}"})
+                r.raise_for_status()
+                break
+            except httpx.HTTPError:
+                if attempt == 3:
+                    raise
+                time.sleep(2 * (attempt + 1))
+        data = r.content
+        b[:len(data)] = data
+        self.pos += len(data)
+        if self.count:
+            self.got += len(data)
+            self.t["done"] = self.base + self.got
+            now, (lt, lb) = time.time(), self._last
+            if now - lt >= 1.0:
+                inst = (self.got - lb) / (now - lt)
+                self.t["speed"] = inst if not self.t["speed"] else 0.7 * self.t["speed"] + 0.3 * inst
+                self._last = (now, self.got)
+        return len(data)
 
 
 downloads = DownloadManager()

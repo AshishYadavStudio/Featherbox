@@ -18,9 +18,11 @@ from . import config
 LLAMA_TAG = "b12383"
 SD_TAG = "master-1104-5dcfa79"
 SD_HASH = SD_TAG.rsplit("-", 1)[1]
+WHISPER_TAG = "b5454"
 
 _GH_LLAMA = f"https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_TAG}/"
 _GH_SD = f"https://github.com/leejet/stable-diffusion.cpp/releases/download/{SD_TAG}/"
+_GH_WHISPER = f"https://github.com/ggml-org/whisper.cpp/releases/download/{WHISPER_TAG}/"
 _GH_KOKORO = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
 _FFMPEG = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 
@@ -35,14 +37,15 @@ class FileSpec:
     dest: str                    # relative to DATA; for zips, the archive's temp name
     size_mb: int
     extract_to: str | None = None  # relative dir under DATA to unzip into
-    role: str = "model"          # how the engine loads it: model | diffusion | vae | clip_l | t5xxl | llm
+    role: str = "model"          # how the engine loads it: model | diffusion | vae | clip_l | t5xxl | llm | tae | vad
+    members: tuple[str, ...] = ()  # zips only: fetch just these files (by name or "prefix*") with range requests
 
 
 @dataclass
 class Component:
     id: str
     kind: str                    # engine | model
-    category: str                # llm | image | tts | tool
+    category: str                # llm | image | video | tts | stt | music | tool
     name: str
     description: str
     files: list[FileSpec]
@@ -60,7 +63,9 @@ class Component:
 
     def download_mb(self) -> int:
         """What is still left to download (shared files already on disk are skipped)."""
-        return sum(f.size_mb for f in self.files if not (config.DATA / (f.extract_to or f.dest)).exists())
+        have = shared_paths_in_use(self)
+        return sum(f.size_mb for f in self.files
+                   if f.dest not in have and not (config.DATA / (f.extract_to or f.dest)).exists())
 
     @property
     def marker(self) -> Path:
@@ -91,6 +96,26 @@ def _llm(cid: str, name: str, repo: str, file: str, mb: int, desc: str, lic: str
                      lic, tags=tags, meta={"layers": layers, "ctx": 4096, "kv_mb_per_1k": kv_mb_per_1k})
 
 
+def _whisper(cid: str, name: str, file: str, mb: int, desc: str, tags: list[str], rtf: float,
+             gpu_rtf: float) -> Component:
+    """rtf / gpu_rtf: seconds of work per second of speech (8-core laptop CPU / RTX 3050 4 GB, measured)."""
+    return Component(cid, "model", "stt", name, desc,
+                     [FileSpec(_hf("ggerganov/whisper.cpp", file), f"models/stt/{file}", mb), _VAD],
+                     "MIT", tags=tags, meta={"rtf": rtf, "gpu_rtf": gpu_rtf})
+
+
+def stt_rtf(c: "Component", hw: dict, gpu: bool) -> float:
+    """Expected seconds of work per second of speech on this PC."""
+    if gpu:
+        return c.meta.get("gpu_rtf", 0.1)
+    return c.meta.get("rtf", 0.5) * 8 / max(2, hw.get("cores", 4))
+
+
+# The CUDA runtime (cudart + cuBLAS) that llama.cpp ships; whisper.cpp's CUDA build uses the same 12.4 libraries.
+_LLAMA_CUDART = FileSpec(_GH_LLAMA + "cudart-llama-bin-win-cuda-12.4-x64.zip",
+                         "bin/_dl/cudart-llama-bin-win-cuda-12.4-x64.zip", 391, extract_to="bin/llama-cuda")
+
+
 # Files shared by several models (downloaded once; kept while any model that uses them is installed).
 _QWEN3_4B = FileSpec(_hf("unsloth/Qwen3-4B-Instruct-2507-GGUF", "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"),
                      "models/llm/Qwen3-4B-Instruct-2507-Q4_K_M.gguf", 2497)
@@ -100,6 +125,8 @@ _SD15_VAE = FileSpec(_hf("stabilityai/sd-vae-ft-mse-original", "vae-ft-mse-84000
                      "models/encoders/vae-ft-mse-840000-ema-pruned.safetensors", 319, role="vae")
 _SDXL_VAE = FileSpec(_hf("madebyollin/sdxl-vae-fp16-fix", "sdxl.vae.safetensors"),
                      "models/encoders/sdxl-vae-fp16-fix.safetensors", 319, role="vae")
+_VAD = FileSpec(_hf("ggml-org/whisper-vad", "ggml-silero-v6.2.0.bin"),
+                "models/stt/ggml-silero-v6.2.0.bin", 1, role="vad")   # skips silence (stops "phantom" text)
 _UMT5 = FileSpec(_hf("city96/umt5-xxl-encoder-gguf", "umt5-xxl-encoder-Q4_K_M.gguf"),
                  "models/encoders/umt5-xxl-encoder-Q4_K_M.gguf", 3486, role="t5xxl")
 
@@ -108,8 +135,8 @@ CATALOG: list[Component] = [
     # ---------------- engines ----------------
     Component("llama-cuda", "engine", "llm", "llama.cpp (NVIDIA CUDA)",
               "Text engine for NVIDIA GPUs. Fastest option for chat and script writing.",
-              _engine_files(_GH_LLAMA, [(f"llama-{LLAMA_TAG}-bin-win-cuda-12.4-x64.zip", 319),
-                                        ("cudart-llama-bin-win-cuda-12.4-x64.zip", 391)], "llama-cuda"),
+              _engine_files(_GH_LLAMA, [(f"llama-{LLAMA_TAG}-bin-win-cuda-12.4-x64.zip", 319)], "llama-cuda")
+              + [_LLAMA_CUDART],
               "MIT", backend="cuda"),
     Component("llama-vulkan", "engine", "llm", "llama.cpp (Vulkan)",
               "Text engine for AMD / Intel / NVIDIA GPUs via Vulkan. Small download.",
@@ -132,6 +159,20 @@ CATALOG: list[Component] = [
               "Image engine for PCs without a GPU (slow: minutes per image).",
               _engine_files(_GH_SD, [(f"sd-master-{SD_HASH}-bin-win-cpu-x64.zip", 18)], "sd-cpu"),
               "MIT", backend="cpu"),
+    Component("whisper-cpu", "engine", "stt", "whisper.cpp (CPU)",
+              "Speech-to-text engine. Runs on the processor of any PC, so it never competes with image or "
+              "video jobs for the graphics card.",
+              _engine_files(_GH_WHISPER, [("whisper-bin-x64.zip", 9)], "whisper-cpu"),
+              "MIT"),
+    Component("whisper-cuda", "engine", "stt", "whisper.cpp (NVIDIA CUDA)",
+              "Speech-to-text on the graphics card: about 20x faster than the CPU engine. Shares the CUDA "
+              "libraries of the text engine, so only the speech parts are downloaded.",
+              [FileSpec(_GH_WHISPER + "whisper-bin-win-cuda-12.4.0-x64.zip", "bin/_dl/whisper-cuda.zip", 258,
+                        extract_to="bin/whisper-cuda",
+                        members=("whisper-cli.exe", "whisper.dll", "ggml.dll", "ggml-base.dll", "ggml-cuda.dll",
+                                 "ggml-cpu-*")),
+               _LLAMA_CUDART],
+              "MIT", backend="cuda"),
     Component("ffmpeg", "engine", "tool", "FFmpeg",
               "Video encoder used to assemble the final video. Skipped if already on your PATH.",
               [FileSpec(_FFMPEG, "bin/_dl/ffmpeg.zip", 200, extract_to="bin/ffmpeg")],
@@ -275,6 +316,20 @@ CATALOG: list[Component] = [
     Component("tts-piper", "model", "tts", "Piper voices",
               "Extra voices for Malayalam, Telugu, Nepali and 30+ more languages.",
               [], "MIT", soon=True),
+    # ---- speech to text (whisper.cpp)
+    _whisper("stt-whisper-base", "Whisper Base", "ggml-base-q5_1.bin", 57,
+             "Smallest and quickest. Fine for clear English; weaker on accents and other languages.",
+             tags=["English", "Fastest"], rtf=0.1, gpu_rtf=0.02),
+    _whisper("stt-whisper-small", "Whisper Small", "ggml-small-q5_1.bin", 181,
+             "A good balance for English and the bigger languages. Can translate speech to English.",
+             tags=["99 languages", "Translates"], rtf=0.25, gpu_rtf=0.03),
+    _whisper("stt-whisper-turbo", "Whisper Large v3 Turbo", "ggml-large-v3-turbo-q5_0.bin", 547,
+             "Near-best accuracy at a fraction of the cost. Recommended, including Hindi and other Indian "
+             "languages. (It writes what was said; for translation use Small or Large v3.)",
+             tags=["Recommended", "Hindi", "99 languages"], rtf=0.6, gpu_rtf=0.07),
+    _whisper("stt-whisper-large", "Whisper Large v3", "ggml-large-v3-q5_0.bin", 1031,
+             "The most accurate Whisper, and the best at translating to English. Several times slower than Turbo.",
+             tags=["Most accurate", "Translates"], rtf=1.8, gpu_rtf=0.2),
     # ---- music ----
     Component("music-musicgen", "model", "music", "MusicGen (Meta)",
               "AI-composed background music from a text description. Needs an extra ~4 GB runtime.",
@@ -418,8 +473,22 @@ def fit_label(c: Component, hw: dict) -> tuple[str, str]:
             level = "slow" if c.size_mb <= 1200 else "very-slow"
             return level, f"{where} runs on the CPU. Expect slow writing."
         return "too-big", f"Needs about {_gb(need + 4096)} of memory; this PC has {_gb(ram_mb)} RAM."
+    if c.category == "stt":
+        need_ram = c.size_mb * 2 + 1024
+        if ram_mb < need_ram:
+            return "too-big", f"Needs about {_gb(need_ram)} of RAM; this PC has {_gb(ram_mb)}."
+
+        def took(rtf: float) -> str:
+            secs = rtf * 600
+            return "under a minute" if secs < 60 else f"about {secs / 60:.0f} min"
+        cpu = took(stt_rtf(c, hw, False))
+        if hw.get("backend") == "cuda":
+            return "great", (f"{took(stt_rtf(c, hw, True)).capitalize()} for 10 minutes of speech with the NVIDIA "
+                             f"engine ({cpu} on the processor).")
+        level = "great" if stt_rtf(c, hw, False) <= 0.5 else "slow"
+        return level, f"Runs on the processor (CPU): {cpu} for 10 minutes of speech on this PC."
     # image / video
-    need_v = c.meta.get("vram_mb", 3000)
+    need_v =c.meta.get("vram_mb", 3000)
     need_ram = c.size_mb + 6144
     what = "per clip" if c.category == "video" else "per image"
     if vram >= need_v:
@@ -460,6 +529,13 @@ def find_exe(folder: str, names: tuple[str, ...]) -> Path | None:
 
 def engine_exe(category: str, backend: str) -> tuple[Path, str]:
     """Find an installed engine executable, preferring the chosen backend."""
+    if category == "stt":
+        for b in ("cuda", "cpu") if backend == "cuda" else ("cpu",):
+            comp = BY_ID[f"whisper-{b}"]
+            exe = find_exe(f"whisper-{b}", ("whisper-cli.exe",)) if comp.is_installed() else None
+            if exe:
+                return exe, b
+        raise RuntimeError("Speech-to-text engine not installed. Open Models → Speech to text.")
     names = {"llm": ("llama-server.exe",), "image": ("sd-cli.exe", "sd.exe")}[category]
     prefix = {"llm": "llama", "image": "sd"}[category]
     order = [backend] + [b for b in ("cuda", "vulkan", "cpu") if b != backend]
