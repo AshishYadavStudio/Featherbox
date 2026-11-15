@@ -76,6 +76,15 @@ def make_loop(raw: Path, out: Path) -> Path:
     return out
 
 
+def clip_to_mp4(raw: Path, out: Path) -> Path:
+    """A standalone AI clip (Wan: 16 fps) as a shareable MP4: frames interpolated to 30 fps, size kept."""
+    ff = catalog.ffmpeg_exe()
+    _run([ff, "-y", "-hide_banner", "-loglevel", "error", "-i", str(raw),
+          "-vf", "minterpolate=fps=30:mi_mode=mci:mc_mode=aobmc:vsbmc=1,format=yuv420p", "-an",
+          *_video_codec(), "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out)])
+    return out
+
+
 def build_segment(image: Path, audio: Path, duration: float, narration: str, out: Path,
                   idx: int, captions: bool = True, clip: Path | None = None) -> Path:
     """One scene: picture (slow zoom/pan) or AI clip loop, plus voice line and burned-in captions."""

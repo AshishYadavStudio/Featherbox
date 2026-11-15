@@ -57,6 +57,17 @@ export type ProjectDetail = {
   project: string; video: string; thumb: string; duration: number | null;
 };
 export type MusicOption = { id: string; label: string };
+export type Creation = {
+  id: string; kind: "image" | "video" | "voice"; url: string; thumb?: string; created: number; seconds?: number;
+  prompt?: string; negative?: string; style?: string; aspect?: string; model?: string; model_name?: string;
+  seed?: number; width?: number; height?: number; image?: string | null; duration?: number; quality?: string;
+  text?: string; voice?: string; voice_name?: string; speed?: number;
+};
+export type ToolModel = { id: string; name: string; i2v: boolean; arch: string | null };
+export type ToolOptions = {
+  image_models: ToolModel[]; video_models: ToolModel[]; active: { image: string | null; video: string | null };
+  styles: string[]; video_quality: string;
+};
 export type MusicOptions = { moods: MusicOption[]; tracks: MusicOption[]; tone_mood: Record<string, string> };
 
 export async function api<T = any>(path: string, init?: RequestInit): Promise<T> {

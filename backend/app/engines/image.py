@@ -108,7 +108,14 @@ def _run_sd(cmd: list[str], exe: Path, out: Path, what: str,
                 raise Cancelled()
     rc = proc.wait()
     if rc != 0 or not out.exists():
-        msg = tail.decode("utf-8", "replace").strip().splitlines()[-8:]
+        text = tail.decode("utf-8", "replace")
+        if re.search(r"cannot make enough memory|out of memory|failed to allocate", text, re.I):
+            free, total = hardware.free_vram_mb(), hardware.detect().get("vram_mb", 0)
+            others = hardware.other_gpu_programs()
+            hint = (f" Another program is using the graphics card: {'; '.join(others)}. Close it and try again."
+                    if others else " Close other programs that use the graphics card (games, other AI apps) and try again.")
+            raise RuntimeError(f"Not enough free graphics memory: only {free} MB of {total} MB is free right now.{hint}")
+        msg = text.strip().splitlines()[-8:]
         raise RuntimeError(f"{what} failed:\n" + "\n".join(msg))
     return out
 
@@ -137,7 +144,8 @@ class VideoEngine:
 
     def generate(self, prompt: str, out: Path, init_image: Path | None = None, seed: int = -1,
                  model_id: str | None = None, on_progress: Callable[[float], None] | None = None,
-                 is_cancelled: Callable[[], bool] | None = None) -> Path:
+                 is_cancelled: Callable[[], bool] | None = None,
+                 width: int | None = None, height: int | None = None) -> Path:
         hw = hardware.detect()
         exe, backend = catalog.engine_exe("image", hw["backend"])
         comp = catalog.get(model_id or self.default_model())
@@ -153,7 +161,7 @@ class VideoEngine:
                 and (config.DATA / tae.dest).exists())
         cmd = [str(exe), "-M", "vid_gen", *model_args(comp, skip=() if fast else ("tae",)),
                "-p", prompt, "-n", WAN_NEGATIVE,
-               "-W", str(m["width"]), "-H", str(m["height"]), "--video-frames", str(m["frames"]),
+               "-W", str(width or m["width"]), "-H", str(height or m["height"]), "--video-frames", str(m["frames"]),
                "--fps", str(m["fps"]), "--steps", str(m["steps"]), "--cfg-scale", str(m["cfg"]),
                "--sampling-method", "euler", "--flow-shift", str(m["flow_shift"]), "-s", str(seed),
                "-o", str(out)]

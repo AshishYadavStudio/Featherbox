@@ -117,3 +117,28 @@ def detect() -> dict:
 def free_vram_mb() -> int:
     nv = nvidia_gpus()
     return max((g["free_mb"] for g in nv), default=0)
+
+
+def other_gpu_programs() -> list[str]:
+    """Other programs holding NVIDIA GPU memory, described for people (e.g. 'python.exe in D:/Tools/TTS')."""
+    if not shutil.which("nvidia-smi"):
+        return []
+    import os
+    import psutil
+    mine = {os.getpid(), *(c.pid for c in psutil.Process().children(recursive=True))}
+    out = []
+    for line in _run(["nvidia-smi", "--query-compute-apps=pid,process_name", "--format=csv,noheader"]).splitlines():
+        pid_s, _, name = line.partition(",")
+        try:
+            pid = int(pid_s.strip())
+        except ValueError:
+            continue
+        if pid in mine:
+            continue
+        label = os.path.basename(name.strip()) or f"process {pid}"
+        try:
+            label += f" in {psutil.Process(pid).cwd()}"
+        except (psutil.Error, OSError):
+            pass
+        out.append(label)
+    return out

@@ -9,7 +9,8 @@ with 4–6 GB graphics cards (and works on CPU-only PCs, more slowly).
 - **Chat** with a local text model.
 - **Studio** (the first ready-made creation): type a topic and get a finished vertical video with a
   script, voiceover, AI pictures or AI motion, captions and music.
-- Standalone image, video and voice tools are next on the roadmap.
+- **Image**, **Video** and **Voice** tools: make a picture, a short AI clip (from text or from a picture)
+  or a voice recording directly, with any installed model.
 
 ## Install (for users)
 
@@ -111,6 +112,23 @@ Engines. Each model gets advice for *this* PC, but nothing is ever blocked: you 
 - Image architectures supported by the engine: SD 1.5, SDXL, FLUX.1 and Z-Image. Piper and MusicGen
   are listed as coming soon.
 
+## Image, Video and Voice tools
+
+Standalone pages for working with one kind of model directly. Everything is saved under
+`data\creations\<image|video|voice>\` (the file plus a `.json` with the settings used), so each page keeps
+a gallery with Download, "Use these settings again", Delete and Open folder.
+
+| Tool | Input | Options | Speed on an RTX 3050 4 GB |
+|---|---|---|---|
+| **Image** | A description | Model, shape (portrait / square / landscape), style, 1–4 images, negative prompt, seed | ~40 s per image (Z-Image Turbo) |
+| **Video** | A description, optionally a starting picture (upload, or **Animate** from the Image page) | Model, shape, Fast / Best, seed | ~3 min per 2 s clip (Wan 2.2, Fast) |
+| **Voice** | Up to 5,000 characters, English or Hindi | Voice (grouped by language), speed | Seconds; runs on the CPU, never queued behind GPU jobs |
+
+Image and Video run as GPU jobs, one at a time, shared with the Studio. Shapes keep about the model's
+native pixel count (Z-Image: 576×1024, 768×768, 1024×576; Wan: 480×832, 640×640, 832×480). If another
+program is holding the graphics memory, the error names it (e.g. "python.exe in D:\Tools\TTS") instead of
+showing raw engine output.
+
 ## AI motion (optional video models)
 
 With a Wan video model installed (Models → Video), scenes can move instead of using a slow zoom and pan:
@@ -180,5 +198,6 @@ Check each license before selling the app or using generated content commerciall
 - [x] Bigger model library with "will it run here?" advice, model choice and your own Hugging Face links
 - [x] AI motion with Wan video models (whole video, first scene, or single scenes)
 - [ ] Piper voices for more Indian languages
-- [ ] Standalone tools: image generator, video generator, text-to-speech, speech-to-text
+- [x] Standalone tools: image generator, video generator, text-to-speech
+- [ ] Speech-to-text (whisper.cpp)
 - [ ] Hugging Face model search inside the Models page

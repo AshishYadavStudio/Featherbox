@@ -25,7 +25,7 @@ const EXAMPLES = [
 
 const TONES = ["educational", "storytelling", "motivational", "funny", "mystery", "news"];
 
-const STYLES: { id: string; label: string; swatch: string }[] = [
+export const STYLES: { id: string; label: string; swatch: string }[] = [
   { id: "cinematic", label: "Cinematic", swatch: "linear-gradient(135deg,#1d2b53,#b8562f)" },
   { id: "photoreal", label: "Photo", swatch: "linear-gradient(135deg,#5b7f5e,#d9c7a1)" },
   { id: "anime", label: "Anime", swatch: "linear-gradient(135deg,#ff7eb3,#7afcff)" },

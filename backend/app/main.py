@@ -25,6 +25,7 @@ from .engines.llm import llm
 from .engines.tts import tts
 from .jobs import GPU_LOCK, jobs
 from .recipes import topic_to_short as t2s
+from . import tools
 
 app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -259,6 +260,104 @@ def tts_preview(req: TTSPreview) -> Response:
         raise HTTPException(409, str(exc))
 
 
+# ---------------------------------------------------------------- standalone tools
+@app.get("/api/tools/options")
+def tool_options() -> dict:
+    def models(category: str, engine) -> list[dict]:
+        return [{"id": c.id, "name": c.name, "i2v": bool(c.meta.get("i2v")), "arch": c.meta.get("arch")}
+                for c in catalog.installed(category)]
+    return {"image_models": models("image", image_engine), "video_models": models("video", video_engine),
+            "active": {"image": _active(image_engine), "video": _active(video_engine)},
+            "styles": list(t2s.STYLES), "video_quality": config.load_settings().get("video_quality", "fast")}
+
+
+class ImageRequest(BaseModel):
+    prompt: str = Field(min_length=2, max_length=2000)
+    negative: str = Field("", max_length=1000)
+    model: str | None = None
+    aspect: str = Field("portrait", pattern="^(portrait|square|landscape)$")
+    style: str = "none"
+    count: int = Field(1, ge=1, le=4)
+    seed: int = -1
+
+
+@app.post("/api/tools/image")
+def tool_image(req: ImageRequest) -> dict:
+    job = jobs.submit("image", f"Image: {req.prompt[:50]}",
+                      lambda j: tools.make_images(j, req.prompt, req.negative, req.model, req.aspect, req.style,
+                                                  req.count, req.seed))
+    return job.to_dict()
+
+
+class VideoRequest(BaseModel):
+    prompt: str = Field(min_length=2, max_length=2000)
+    image: str | None = Field(None, max_length=100)
+    model: str | None = None
+    aspect: str = Field("portrait", pattern="^(portrait|square|landscape)$")
+    seed: int = -1
+
+
+@app.post("/api/tools/video")
+def tool_video(req: VideoRequest) -> dict:
+    if not catalog.installed("video"):
+        raise HTTPException(409, "No video model installed. Open Models → Video to download one.")
+    job = jobs.submit("video", f"Video: {req.prompt[:50]}",
+                      lambda j: tools.make_video(j, req.prompt, req.image, req.model, req.aspect, req.seed))
+    return job.to_dict()
+
+
+class VoiceRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=5000)
+    voice: str = "af_heart"
+    speed: float = Field(1.0, ge=0.6, le=1.6)
+
+
+@app.post("/api/tools/voice")
+def tool_voice(req: VoiceRequest) -> dict:
+    """Runs right away on the CPU (not queued behind GPU jobs)."""
+    try:
+        return tools.make_voice(req.text, req.voice, req.speed)
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(409, str(exc))
+
+
+@app.get("/api/creations/{kind}")
+def creations(kind: str) -> list[dict]:
+    try:
+        return tools.list_creations(kind)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+
+
+@app.delete("/api/creations/{kind}/{cid}")
+def delete_creation(kind: str, cid: str) -> dict:
+    try:
+        tools.delete_creation(kind, cid)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {"ok": True}
+
+
+@app.post("/api/creations/upload")
+async def upload_picture(request: Request) -> dict:
+    data = await request.body()
+    if len(data) > 40 * 1024 * 1024:
+        raise HTTPException(413, "Pictures up to 40 MB, please.")
+    try:
+        return tools.save_upload(data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.post("/api/creations/{kind}/reveal")
+def reveal_creations(kind: str) -> dict:
+    if kind not in tools.EXT:
+        raise HTTPException(404, "Unknown kind")
+    folder = tools._dir(kind)
+    subprocess.Popen(["explorer", str(folder)])
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------- studio recipe
 @app.get("/api/studio/options")
 def studio_options() -> dict:
@@ -443,6 +542,8 @@ def reveal_project(pid: str) -> dict:
 
 # ---------------------------------------------------------------- static files
 app.mount("/outputs", StaticFiles(directory=config.OUTPUTS), name="outputs")
+tools.CREATIONS.mkdir(parents=True, exist_ok=True)
+app.mount("/creations", StaticFiles(directory=tools.CREATIONS), name="creations")
 
 if config.FRONTEND_DIST.exists():
     app.mount("/assets", StaticFiles(directory=config.FRONTEND_DIST / "assets"), name="assets")
