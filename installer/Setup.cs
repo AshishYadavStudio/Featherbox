@@ -1,6 +1,8 @@
 // Featherbox setup + uninstaller (one source, compiled twice; UNINSTALLER selects the uninstaller).
 // Per-user install: no admin rights needed. Setup.exe carries the app as an embedded payload.zip.
-//   Setup:      Featherbox-Setup.exe [/S] [/D=<folder>] [/NOLAUNCH]
+//   Setup:      Featherbox-Setup.exe [/S] [/D=<folder>] [/NOLAUNCH] [/UPDATE]
+//               /UPDATE (with /S, used by the app's "Update now"): restart Featherbox in the background afterwards,
+//               even if the update failed, so the open window can reconnect.
 //   Uninstall:  uninstall.exe [/S] [/DELETEDATA]
 // Written for the C# 5 compiler that ships with Windows (.NET Framework 4.x).
 using System;
@@ -132,14 +134,26 @@ static class Program
         if (Common.HasFlag(args, "/S"))
         {
             string log = Path.Combine(Path.GetTempPath(), "Featherbox-setup.log");
+            string root = folder ?? SetupForm.DefaultFolder();
+            int code = 0;
             try
             {
-                var inst = new Installer(folder ?? SetupForm.DefaultFolder(), true);
+                var inst = new Installer(root, true);
                 inst.Run(null);
+                root = inst.Root;
                 File.WriteAllText(log, "OK " + inst.Root);
-                return 0;
             }
-            catch (Exception ex) { File.WriteAllText(log, "FAILED " + ex); return 1; }
+            catch (Exception ex) { File.WriteAllText(log, "FAILED " + ex); code = 1; }
+            if (Common.HasFlag(args, "/UPDATE"))
+            {
+                string launcher = Path.Combine(root, Common.LauncherExe);
+                if (File.Exists(launcher))
+                {
+                    try { Process.Start(new ProcessStartInfo(launcher, "--background") { WorkingDirectory = root, UseShellExecute = false }); }
+                    catch { }
+                }
+            }
+            return code;
         }
         Common.InitUi();
         Application.Run(new SetupForm(folder, Common.HasFlag(args, "/NOLAUNCH")));

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Download, ExternalLink, Link2, Loader2, Plus, Rocket, Trash2, X } from "lucide-react";
+import { UpdatesCard } from "../components/Updates";
 import { api, fmtMB, fmtSize, post, type Catalog, type Component, type SystemInfo } from "../api";
 
 /** Advice only: every model can still be downloaded. */
@@ -148,6 +149,8 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
         </div>
         {(tab === "llm" || tab === "image") && <AddCustom kinds={cat?.custom_kinds ?? {}} tab={tab} act={act} />}
       </section>
+
+      <UpdatesCard />
     </div>
   );
 }

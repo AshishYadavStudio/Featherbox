@@ -31,6 +31,20 @@ an entry in Windows "Installed apps".
 - Unsigned build: Windows SmartScreen shows "Windows protected your PC" → **More info → Run anyway**
   until the installer is code-signed.
 
+### Updates
+
+From 0.3.0 on, Featherbox checks GitHub about once a day for a newer release; only that request is sent, nothing
+personal. A banner shows the new version with its release notes, and **Update now**:
+
+1. downloads the installer to the Temp folder;
+2. checks it against the SHA-256 checksum GitHub publishes, and won't run a file that doesn't match;
+3. runs it silently (`/S /UPDATE /D=<install folder>`).
+
+Setup closes the app, replaces the program, keeps `data\`, and restarts it in the background, and the open window
+reloads into the new version (about 15 s). Updating is refused while something is being made or a model is
+downloading. **Models → Featherbox x.y.z** has **Check now** and a switch to turn automatic checks off. Copies
+running from source only get a Download link. 0.2.x has no updater, so install 0.3.0 by hand once.
+
 Silent install for IT/testing: `Featherbox-Setup.exe /S /D=C:\Featherbox`; uninstall with
 `uninstall.exe /S` (add `/DELETEDATA` to remove models and videos too).
 
@@ -236,3 +250,4 @@ Check each license before selling the app or using generated content commerciall
 - [x] Standalone tools: image generator, video generator, text-to-speech
 - [x] Speech-to-text (whisper.cpp): files, videos and microphone, SRT/VTT subtitles, CPU or CUDA
 - [ ] Hugging Face model search inside the Models page
+- [x] Update notifications and one-click updates (checksum-verified)

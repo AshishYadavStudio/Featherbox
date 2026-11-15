@@ -9,6 +9,7 @@ import ImageTool from "./pages/ImageTool";
 import VideoTool from "./pages/VideoTool";
 import VoiceTool from "./pages/VoiceTool";
 import TranscribeTool from "./pages/TranscribeTool";
+import { UpdateBanner } from "./components/Updates";
 
 export type Page = "studio" | "image" | "video" | "voice" | "transcribe" | "chat" | "library" | "models";
 
@@ -31,6 +32,7 @@ export default function App() {
   });
   const [sys, setSys] = useState<SystemInfo | null>(null);
   const [offline, setOffline] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => save("featherbox.page", page), [page]);
 
@@ -88,9 +90,10 @@ export default function App() {
         </div>
       </aside>
       <main className="content">
-        {offline && (
-          <div className="banner error">Can't reach the Featherbox backend. Start it with <code>start.bat</code>.</div>
+        {offline && !updating && (
+          <div className="banner error">Can't reach Featherbox. If you closed it from the tray icon, open it again from the Start menu.</div>
         )}
+        <UpdateBanner onRestarting={setUpdating} />
         {page === "studio" && <Studio sys={sys} goModels={() => setPage("models")} goLibrary={() => setPage("library")} />}
         {page === "image" && <ImageTool goModels={() => setPage("models")} canAnimate={!!sys?.video_ready}
           onAnimate={(ref) => { save("featherbox.videoStart", ref); setPage("video"); }} />}

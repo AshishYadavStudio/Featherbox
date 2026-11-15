@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 
 APP_NAME = "Featherbox"
-APP_VERSION = "0.2.1"
+APP_VERSION = "0.3.0"
 
 
 def _env(name: str, default: str) -> str:
@@ -42,6 +42,7 @@ _DEFAULTS: dict = {
     "video_quality": "fast",  # fast: tiny TAEHV decoder (~2.5x quicker, slightly softer) | best: full Wan VAE
     "voice": "af_heart",
     "stt_model": None,        # speech-to-text model; None = best installed
+    "update_check": True,     # look for a new Featherbox version about once a day (asks GitHub; sends nothing personal)
 }
 
 

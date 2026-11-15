@@ -26,7 +26,7 @@ from .engines.tts import tts
 from .engines.stt import LANGUAGES as STT_LANGUAGES, stt
 from .jobs import GPU_LOCK, jobs
 from .recipes import topic_to_short as t2s
-from . import tools
+from . import tools, updates
 
 app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -45,6 +45,8 @@ def shutdown(request: Request) -> dict:
         import psutil
         llm.stop()
         for child in psutil.Process().children(recursive=True):   # image engine / ffmpeg still running
+            if child.pid == updates.installer_pid:
+                continue          # the update installer is what asked us to quit: it must keep going
             try:
                 child.kill()
             except psutil.Error:
@@ -53,6 +55,30 @@ def shutdown(request: Request) -> dict:
 
     threading.Timer(0.3, stop).start()
     return {"ok": True}
+
+
+@app.on_event("startup")
+def _start_update_checks() -> None:
+    updates.start_background()
+
+
+# ---------------------------------------------------------------- updates
+@app.get("/api/update")
+def update_status() -> dict:
+    return updates.status()
+
+
+@app.post("/api/update/check")
+def update_check() -> dict:
+    return updates.check(force=True)
+
+
+@app.post("/api/update/install")
+def update_install() -> dict:
+    try:
+        return updates.start_install()
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
 
 
 @app.get("/api/system")
@@ -86,6 +112,7 @@ class SettingsPatch(BaseModel):
     video_quality: str | None = Field(None, pattern="^(fast|best)$")
     voice: str | None = None
     stt_model: str | None = None
+    update_check: bool | None = None
 
 
 @app.patch("/api/settings")

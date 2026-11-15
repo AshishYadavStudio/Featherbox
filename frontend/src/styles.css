@@ -387,3 +387,18 @@ details.adv[open] summary::before { transform: rotate(90deg); }
 .seg:hover { background: var(--card-2); }
 .seg.on { background: var(--accent-soft); }
 .seg time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 2px; }
+
+/* ---------- Updates ---------- */
+.banner.update { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: linear-gradient(135deg, rgba(255, 122, 26, .13), rgba(255, 61, 127, .1)); border-color: rgba(255, 122, 26, .35); }
+.banner.update > svg { color: var(--accent); flex: none; }
+.update-text { flex: 1; min-width: 220px; }
+.update-progress { display: grid; gap: 4px; margin-top: 6px; max-width: 360px; }
+.update-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(8, 9, 12, .72); backdrop-filter: blur(4px); }
+.update-overlay .card { max-width: 420px; display: grid; gap: 10px; justify-items: center; text-align: center; }
+.update-overlay .card svg { color: var(--accent); }
+.card.notes { max-width: 640px; width: calc(100% - 32px); max-height: 80vh; display: grid; gap: 12px; grid-template-rows: auto 1fr auto; }
+.notes-body { white-space: pre-wrap; overflow-y: auto; font-size: 14px; line-height: 1.6; color: var(--text); }
+.card.updates { margin-top: 28px; display: grid; gap: 12px; }
+.card.updates p { margin: 4px 0 0; }
+.ok-ic { color: var(--ok, #34d399); vertical-align: -2px; }

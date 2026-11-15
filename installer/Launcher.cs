@@ -50,7 +50,8 @@ static class Launcher
                 if (WaitReady(60)) OpenWindow();
                 return;
             }
-            Application.Run(new TrayApp());
+            // --background (after an update): start quietly; the window that was already open reconnects by itself.
+            Application.Run(new TrayApp(args.Length > 0 && args[0] == "--background"));
         }
     }
 
@@ -118,12 +119,15 @@ class TrayApp : ApplicationContext
     Process server;
     bool quitting;
 
-    public TrayApp()
+    readonly bool background;
+
+    public TrayApp(bool background)
     {
+        this.background = background;
         Icon icon = null;
         try { icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
         splash = MakeSplash(icon);
-        splash.Show();
+        if (!background) splash.Show();
         ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
 
         var menu = new ContextMenuStrip();
@@ -214,6 +218,11 @@ class TrayApp : ApplicationContext
             }
             splash.Close();
             tray.Visible = true;
+            if (background)
+            {
+                tray.ShowBalloonTip(6000, "Featherbox was updated", "It's ready. Your open window reconnects by itself.", ToolTipIcon.Info);
+                return;
+            }
             Launcher.OpenWindow();
             tray.ShowBalloonTip(6000, "Featherbox is running",
                 "It keeps running here while you work. Right-click this icon to quit.", ToolTipIcon.Info);
