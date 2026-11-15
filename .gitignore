@@ -1,0 +1,29 @@
+# --- user data: downloaded models, engines, videos, settings (many GB, per machine) ---
+data/
+
+# --- Python ---
+backend/.venv/
+__pycache__/
+*.pyc
+
+# --- web UI ---
+frontend/node_modules/
+frontend/dist/
+
+# --- installer build output (rebuild with: backend\.venv\Scripts\python installer\build.py) ---
+installer/build/
+installer/dist/
+
+# --- local tool / editor settings (contain machine-specific paths) ---
+.claude/
+.vscode/
+.idea/
+
+# --- misc ---
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# --- TypeScript incremental build cache ---
+*.tsbuildinfo
