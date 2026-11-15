@@ -83,7 +83,7 @@ export default function App() {
             <div className="hw-main">{offline ? "Backend offline" : gpu ? gpu.name.replace("NVIDIA GeForce ", "") : hw ? "CPU only" : "Detecting…"}</div>
             {hw && !offline && (
               <div className="hw-sub">
-                {hw.vram_mb ? `${(hw.vram_mb / 1024).toFixed(0)} GB VRAM · ` : ""}{hw.ram_gb} GB RAM · {hw.backend.toUpperCase()}
+                {hw.vram_mb ? `${(hw.vram_mb / 1024).toFixed(0)} GB VRAM · ` : hw.igpu && hw.backend === "vulkan" ? `${Math.round(hw.igpu.memory_mb / 1024)} GB shared · ` : ""}{hw.ram_gb} GB RAM · {hw.backend.toUpperCase()}
               </div>
             )}
           </div>

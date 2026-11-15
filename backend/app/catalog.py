@@ -443,6 +443,12 @@ def _gb(mb: float) -> str:
     return f"{gb:g} GB"
 
 
+def _gpu_short(name: str) -> str:
+    """'AMD Radeon(TM) 860M Graphics' -> 'Radeon 860M'."""
+    s = re.sub(r"\((TM|R)\)|\bAMD\b|\bIntel\b|\bGraphics\b|\bGPU\b|\(\d+\s*GB\)", "", name, flags=re.I)
+    return re.sub(r"\s+", " ", s).strip() or "graphics"
+
+
 def fit_label(c: Component, hw: dict) -> tuple[str, str]:
     """(level, reason) — advice only; the user can always download anything.
 
@@ -451,6 +457,7 @@ def fit_label(c: Component, hw: dict) -> tuple[str, str]:
     gpu = hw.get("backend") != "cpu"
     vram = hw.get("vram_mb", 0) if gpu else 0
     ram_mb = hw.get("ram_gb", 0) * 1024
+    igpu = hw.get("igpu") if hw.get("backend") == "vulkan" and not vram else None
     if c.soon:
         return "soon", "Coming in a future update."
     if c.kind == "engine":
@@ -462,6 +469,15 @@ def fit_label(c: Component, hw: dict) -> tuple[str, str]:
     if c.category == "llm":
         kv = c.meta.get("kv_mb_per_1k", c.size_mb / 25) * c.meta.get("ctx", 4096) / 1024
         need = c.size_mb + kv + 500
+        if igpu and need <= igpu["memory_mb"] - 1024 and ram_mb >= need + 4096:
+            # Built-in graphics read the model from RAM, so speed follows model size.
+            # Measured on a Radeon 860M: Gemma 3 1B writes about 42 tokens a second.
+            on = f"Runs on the built-in {_gpu_short(igpu['name'])} graphics, using shared memory"
+            if c.size_mb <= 3000:
+                return "great", f"{on}."
+            if c.size_mb <= 6000:
+                return "slow", f"{on}; a model this size writes more slowly there."
+            return "very-slow", f"{on}; a model this size writes slowly there."
         if vram >= need:
             return "great", f"Fits fully in your {_gb(vram)} of graphics memory."
         if vram >= c.size_mb * 0.4 and ram_mb >= need + 4096:
@@ -469,7 +485,8 @@ def fit_label(c: Component, hw: dict) -> tuple[str, str]:
             return "slow", (f"About {pct}% fits in your {_gb(vram)} graphics memory; the rest runs on the CPU, "
                             f"so it writes more slowly.")
         if ram_mb >= need + 4096:
-            where = "No suitable graphics card, so it" if not vram else "Too big for your graphics memory, so it"
+            where = ("Too big for the built-in graphics' share of memory, so it" if igpu else
+                     "No suitable graphics card, so it" if not vram else "Too big for your graphics memory, so it")
             level = "slow" if c.size_mb <= 1200 else "very-slow"
             return level, f"{where} runs on the CPU. Expect slow writing."
         return "too-big", f"Needs about {_gb(need + 4096)} of memory; this PC has {_gb(ram_mb)} RAM."
@@ -491,6 +508,16 @@ def fit_label(c: Component, hw: dict) -> tuple[str, str]:
     need_v =c.meta.get("vram_mb", 3000)
     need_ram = c.size_mb + 6144
     what = "per clip" if c.category == "video" else "per image"
+    if igpu and need_v <= igpu["memory_mb"] - 1024 and ram_mb >= need_ram:
+        # Measured on a Radeon 860M: DreamShaper (SD 1.5) ~1.5 min per image, Wan 2.1 1.3B ~55 min per clip.
+        on = f"Runs on the built-in {_gpu_short(igpu['name'])} graphics, using shared memory"
+        if c.category == "video":
+            if need_v <= 6000:
+                return "very-slow", f"{on}, but AI video is heavy there: expect close to an hour {what}."
+            return "very-slow", f"{on}, but a video model this size takes several hours {what}."
+        if need_v <= 3000:
+            return "slow", f"{on}: about a minute or two {what}."
+        return "very-slow", f"{on}: several minutes {what}."
     if vram >= need_v:
         extra = " AI video is still heavy: expect several minutes per clip." if c.category == "video" else ""
         return "great", f"Fits in your {_gb(vram)} of graphics memory.{extra}"
@@ -499,7 +526,8 @@ def fit_label(c: Component, hw: dict) -> tuple[str, str]:
         return level, (f"Works best with {_gb(need_v)} graphics memory (you have {_gb(vram)}). Part of it is kept "
                        f"in RAM, so it is slower {what}.")
     if ram_mb >= need_ram:
-        return "very-slow", f"No suitable graphics card, so it runs on the CPU: several minutes {what}."
+        where = "Too big for the built-in graphics' share of memory" if igpu else "No suitable graphics card"
+        return "very-slow", f"{where}, so it runs on the CPU: several minutes {what}."
     return "too-big", f"Needs about {_gb(need_ram)} of RAM; this PC has {_gb(ram_mb)}."
 
 

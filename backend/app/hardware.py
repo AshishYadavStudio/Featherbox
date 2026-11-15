@@ -62,6 +62,51 @@ def _cuda_driver_version() -> float | None:
         return None
 
 
+_DISPLAY_CLASS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+
+
+def _adapter_memory_mb() -> dict[str, int]:
+    """Dedicated memory per display adapter name, from the driver's registry entry (WMI caps it at 4 GB).
+    For a built-in GPU this is the small part of RAM set aside for it at boot."""
+    sizes: dict[str, int] = {}
+    try:
+        import winreg
+        cls = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, _DISPLAY_CLASS)
+    except (ImportError, OSError):
+        return sizes
+    for i in range(64):
+        try:
+            sub = winreg.EnumKey(cls, i)
+        except OSError:
+            break
+        try:
+            key = winreg.OpenKey(cls, sub)
+            name = str(winreg.QueryValueEx(key, "DriverDesc")[0]).strip()
+            raw = None
+            for value in ("HardwareInformation.qwMemorySize", "HardwareInformation.MemorySize"):
+                try:
+                    raw = winreg.QueryValueEx(key, value)[0]
+                    break
+                except OSError:
+                    continue
+            if isinstance(raw, bytes):
+                raw = int.from_bytes(raw[:8], "little")
+            if name and isinstance(raw, int) and raw > 0:
+                sizes[name] = max(sizes.get(name, 0), raw // (1024 * 1024))
+        except OSError:
+            continue
+    return sizes
+
+
+def _is_integrated(vendor: str, name: str) -> bool:
+    """Built-in (shares system RAM) or a separate graphics card? Judged from the product name."""
+    if vendor == "amd":
+        return not re.search(r"\bRX\b|Radeon Pro|FirePro|Instinct|Radeon VII|Vega (56|64)\b", name, re.I)
+    if vendor == "intel":
+        return not re.search(r"Arc(\(TM\))? (Pro )?[AB]\d{2,3}|Iris Xe MAX|\bDG\d", name, re.I)
+    return False
+
+
 @functools.lru_cache(maxsize=1)
 def _other_gpus() -> list[dict]:
     """Non-NVIDIA adapters (AMD / Intel) — candidates for the Vulkan backend."""
@@ -69,13 +114,20 @@ def _other_gpus() -> list[dict]:
         return []
     out = _run(["powershell", "-NoProfile", "-Command",
                 "(Get-CimInstance Win32_VideoController).Name"])
+    memory = _adapter_memory_mb()
     gpus = []
     for name in (n.strip() for n in out.splitlines()):
         low = name.lower()
         if not name or "nvidia" in low or "basic" in low or "virtual" in low:
             continue
         vendor = "amd" if ("amd" in low or "radeon" in low) else "intel" if "intel" in low else "other"
-        gpus.append({"vendor": vendor, "name": name})
+        gpu = {"vendor": vendor, "name": name, "integrated": _is_integrated(vendor, name)}
+        mb = memory.get(name, 0)
+        if gpu["integrated"]:
+            gpu["reserved_mb"] = mb            # set aside at boot; the rest comes from shared RAM
+        elif mb >= 1024:
+            gpu["vram_mb"] = mb
+        gpus.append(gpu)
     return gpus
 
 
@@ -102,6 +154,18 @@ def detect() -> dict:
     primary = max(nv, key=lambda g: g["vram_mb"]) if nv else None
     info["vram_mb"] = primary["vram_mb"] if primary else 0
     info["vram_free_mb"] = primary["free_mb"] if primary else 0
+    others = _other_gpus()
+    cards = [g for g in others if g.get("vram_mb")]
+    if not nv and cards:                       # AMD / Intel graphics card: its own memory (free amount unknown)
+        info["vram_mb"] = max(g["vram_mb"] for g in cards)
+    # Built-in graphics (Radeon 780M/860M, Intel Arc 140V...) use system RAM: Windows lets them take up to
+    # half of it on top of the part reserved at boot. Only counted when there is no graphics card.
+    igpu = next((g for g in others if g.get("integrated")), None)
+    info["igpu"] = None
+    if igpu and not info["vram_mb"]:
+        shared = int(info["ram_gb"] * 1024 / 2)
+        info["igpu"] = {"name": igpu["name"], "memory_mb": igpu.get("reserved_mb", 0) + shared,
+                        "shared_mb": shared}
     if nv and cuda and cuda >= 12.4:
         auto = "cuda"
     elif nv or info["gpus"]:

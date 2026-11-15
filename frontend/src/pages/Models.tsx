@@ -72,7 +72,7 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
         <div className="setup-hw">
           <Spec k="Processor" v={hw ? hw.cpu : "…"} />
           <Spec k="Memory" v={hw ? `${hw.ram_gb} GB RAM` : "…"} />
-          <Spec k="Graphics" v={hw ? (hw.gpus.map((g) => g.name + (g.vram_mb ? ` (${(g.vram_mb / 1024).toFixed(0)} GB)` : "")).join(", ") || "None detected") : "…"} />
+          <Spec k="Graphics" v={hw ? (hw.gpus.map((g) => g.name + (g.vram_mb ? ` (${(g.vram_mb / 1024).toFixed(0)} GB)` : g.integrated ? " (built-in, shares RAM)" : "")).join(", ") || "None detected") : "…"} />
           <div className="spec">
             <div className="lbl">Compute backend</div>
             <select value={sys?.settings.backend ?? "auto"} onChange={(e) => act(() => api("/api/settings", { method: "PATCH", body: JSON.stringify({ backend: e.target.value }) }))}>

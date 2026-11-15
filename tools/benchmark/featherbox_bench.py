@@ -36,7 +36,7 @@ try:
 except ImportError:
     sys.exit("This script needs Featherbox's bundled Python. Start it with Run-Benchmark.bat.")
 
-BENCH_VERSION = "1.0"
+BENCH_VERSION = "1.1"
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 ENGINE_PROCS = {"llama-server.exe": "text", "sd-cli.exe": "image", "sd.exe": "image", "whisper-cli.exe": "speech",
                 "ffmpeg.exe": "ffmpeg"}
@@ -110,16 +110,46 @@ def word_accuracy(ref: str, hyp: str) -> float:
 class Sampler:
     """CPU / RAM every second (psutil) and GPU busy % + GPU memory every ~2 s (Windows performance counters)."""
 
+    # GPU Engine instances are per process (pid_..._engtype_Compute 0), so the whole category is read on every
+    # pass: `Get-Counter -Continuous` resolves its wildcard once and never sees engines started later (the
+    # first version of this script showed ~0% on a Radeon 860M). Busy % is what Task Manager shows: per
+    # engine, summed over processes, then the busiest engine. CUDA work does not appear in these counters at
+    # all, so on NVIDIA the GPU's own utilization from nvidia-smi is used too.
     GPU_PS = r"""
 $ErrorActionPreference = 'SilentlyContinue'
-$c = @('\GPU Engine(*engtype_3D)\Utilization Percentage', '\GPU Engine(*engtype_Compute*)\Utilization Percentage',
-       '\GPU Adapter Memory(*)\Shared Usage', '\GPU Adapter Memory(*)\Dedicated Usage')
-Get-Counter -Counter $c -SampleInterval 2 -Continuous | ForEach-Object {
-  $s = $_.CounterSamples
-  $u = ($s | Where-Object { $_.Path -like '*utilization percentage' } | Measure-Object CookedValue -Sum).Sum
-  $sh = ($s | Where-Object { $_.Path -like '*shared usage' } | Measure-Object CookedValue -Sum).Sum
-  $de = ($s | Where-Object { $_.Path -like '*dedicated usage' } | Measure-Object CookedValue -Sum).Sum
-  [Console]::WriteLine("$([DateTimeOffset]::Now.ToUnixTimeMilliseconds()) $u $sh $de")
+$inv = [Globalization.CultureInfo]::InvariantCulture
+$cat = New-Object Diagnostics.PerformanceCounterCategory('GPU Engine')
+$mem = New-Object Diagnostics.PerformanceCounterCategory('GPU Adapter Memory')
+$smi = (Get-Command nvidia-smi -ErrorAction SilentlyContinue).Source
+$prev = $null
+while ($true) {
+  $u = 0.0; $sh = 0.0; $de = 0.0
+  try {
+    $cur = $cat.ReadCategory()['utilization percentage']
+    if ($prev) {
+      $eng = @{}
+      foreach ($k in $cur.Keys) {
+        $a = $prev[$k]
+        if ($null -ne $a -and $k -match '(luid_\w+?_phys_\d+_eng_\d+)') {
+          $eng[$matches[1]] += [Diagnostics.CounterSample]::Calculate($a.Sample, $cur[$k].Sample)
+        }
+      }
+      foreach ($v in $eng.Values) { if ($v -gt $u) { $u = $v } }
+    }
+    $prev = $cur
+  } catch {}
+  try {
+    $m = $mem.ReadCategory()
+    foreach ($i in $m['shared usage'].Values) { $sh += $i.RawValue }
+    foreach ($i in $m['dedicated usage'].Values) { $de += $i.RawValue }
+  } catch {}
+  if ($smi) {
+    foreach ($line in (& $smi --query-gpu=utilization.gpu --format=csv,noheader,nounits)) {
+      $n = 0.0; if ([double]::TryParse("$line".Trim(), [ref]$n) -and $n -gt $u) { $u = $n }
+    }
+  }
+  [Console]::WriteLine([string]::Format($inv, '{0} {1:0.0} {2:0} {3:0}', [DateTimeOffset]::Now.ToUnixTimeMilliseconds(), $u, $sh, $de))
+  Start-Sleep -Milliseconds 1500
 }
 """
 

@@ -1,6 +1,7 @@
 export type Hardware = {
   os: string; cpu: string; cores: number; threads: number; ram_gb: number; ram_free_gb: number;
-  gpus: { vendor: string; name: string; vram_mb?: number; free_mb?: number }[];
+  gpus: { vendor: string; name: string; vram_mb?: number; free_mb?: number; integrated?: boolean }[];
+  igpu: { name: string; memory_mb: number; shared_mb: number } | null;
   cuda_driver: number | null; vram_mb: number; vram_free_mb: number;
   recommended_backend: string; backend: string;
 };

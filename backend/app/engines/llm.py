@@ -114,14 +114,41 @@ class LLMEngine:
         return r.json()["choices"][0]["message"]["content"]
 
     def chat_json(self, messages: list[dict], schema: dict, **kw) -> dict:
-        text = self.chat(messages, schema=schema, **kw)
         try:
-            return json.loads(text)
+            return self._parse_json(self.chat(messages, schema=schema, **kw), schema)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code != 500:
+                raise
+            # Some small models (Gemma 3 1B) wrap the JSON in ```json fences even when the server enforces a
+            # schema; llama-server then rejects its own output with a 500. Ask again without the enforced
+            # format and read the JSON out of the reply ourselves.
+            first = exc.response.text[:300]
+        msgs = [dict(m) for m in messages]
+        msgs[-1]["content"] += ("\n\nReply with only one JSON object that follows this JSON schema, "
+                                "without code fences or any other text:\n" + json.dumps(schema))
+        try:
+            return self._parse_json(self.chat(msgs, **kw), schema)
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(f"The text engine failed: {exc.response.text[:300] or first}") from exc
+
+    @staticmethod
+    def _parse_json(text: str, schema: dict | None = None) -> dict:
+        text = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", text.strip())
+        try:
+            data = json.loads(text)
         except ValueError:
             m = re.search(r"\{.*\}", text, re.S)
-            if not m:
-                raise RuntimeError("The model did not return valid JSON. Try again.")
-            return json.loads(m.group(0))
+            try:
+                data = json.loads(m.group(0)) if m else None
+            except ValueError:
+                data = None
+        if not isinstance(data, dict):
+            raise RuntimeError("The model did not return valid JSON. Try again, or pick a larger text model.")
+        missing = [k for k in (schema or {}).get("required", []) if k not in data]
+        if missing:
+            raise RuntimeError(f"The model's answer was missing {', '.join(missing)}. Try again, "
+                               "or pick a larger text model.")
+        return data
 
     def stream(self, messages: list[dict], model_id: str | None = None, **kw) -> Iterator[str]:
         self.ensure(model_id)
