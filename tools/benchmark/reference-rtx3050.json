@@ -1,0 +1,418 @@
+{
+  "bench_version": "1.0",
+  "started": "2026-11-15T20:30:28",
+  "args": {
+    "port": 8420,
+    "data": null,
+    "out": null,
+    "full": true,
+    "video": false,
+    "all_image_models": false,
+    "keep": false
+  },
+  "results": [
+    {
+      "name": "Text: chat, first answer (includes loading the model)",
+      "kind": "text",
+      "seconds": 10.5,
+      "first_word_s": 8.1,
+      "chars": 684,
+      "model": "llm-qwen3-4b",
+      "prompt_tok_s": 163.7,
+      "load_s": 7.6,
+      "summary": "684 chars, first words after 8.1 s",
+      "status": "ok",
+      "resources": {
+        "cpu_avg": 20.5,
+        "ram_peak": 19175563264,
+        "engine_rss_peak": {
+          "text": 2977558528
+        },
+        "gpu_busy_avg": 10.1,
+        "gpu_busy_peak": 17.5,
+        "gpu_shared_peak": 278622208.0,
+        "gpu_dedicated_peak": 3982479360.0
+      },
+      "gen_tok_s": 57.86
+    },
+    {
+      "name": "Text: chat, model already loaded",
+      "kind": "text",
+      "seconds": 2.9,
+      "first_word_s": 0.4,
+      "chars": 698,
+      "model": "llm-qwen3-4b",
+      "prompt_tok_s": 55.83,
+      "summary": "698 chars, first words after 0.4 s",
+      "status": "ok",
+      "resources": {
+        "cpu_avg": 22.4,
+        "ram_peak": 19215855616,
+        "engine_rss_peak": {
+          "text": 3003645952
+        },
+        "gpu_busy_avg": 6.2,
+        "gpu_busy_peak": 6.2,
+        "gpu_shared_peak": 278622208.0,
+        "gpu_dedicated_peak": 3982479360.0
+      },
+      "gen_tok_s": 58.52
+    },
+    {
+      "name": "Studio: write an English script",
+      "kind": "script",
+      "seconds": 8.9,
+      "scenes": 6,
+      "summary": "6 scenes",
+      "status": "ok",
+      "resources": {
+        "cpu_avg": 22.4,
+        "ram_peak": 19159261184,
+        "engine_rss_peak": {
+          "text": 3033890816
+        },
+        "gpu_busy_avg": 7.0,
+        "gpu_busy_peak": 7.5,
+        "gpu_shared_peak": 278622208.0,
+        "gpu_dedicated_peak": 3984347136.0
+      }
+    },
+    {
+      "name": "Studio: write a Hindi script",
+      "kind": "script",
+      "seconds": 21.7,
+      "scenes": 6,
+      "summary": "6 scenes",
+      "status": "ok",
+      "resources": {
+        "cpu_avg": 21.4,
+        "ram_peak": 19228364800,
+        "engine_rss_peak": {
+          "text": 3153899520
+        },
+        "gpu_busy_avg": 6.9,
+        "gpu_busy_peak": 7.5,
+        "gpu_shared_peak": 279064576.0,
+        "gpu_dedicated_peak": 3985657856.0
+      }
+    },
+    {
+      "name": "Image: Z-Image Turbo, portrait",
+      "kind": "image",
+      "model": "img-zimage-turbo",
+      "seconds": 42.6,
+      "engine_seconds": 41.8,
+      "size": "576×1024",
+      "summary": "576×1024",
+      "status": "ok",
+      "resources": {
+        "cpu_avg": 25.1,
+        "ram_peak": 23124336640,
+        "engine_rss_peak": {
+          "image": 6514671616
+        },
+        "gpu_busy_avg": 7.6,
+        "gpu_busy_peak": 13.9,
+        "gpu_shared_peak": 6033674240.0,
+        "gpu_dedicated_peak": 3945705472.0
+      }
+    },
+    {
+      "name": "Voice: English paragraph",
+      "kind": "voice",
+      "seconds": 8.2,
+      "audio_s": 18.5,
+      "realtime_x": 2.2,
+      "summary": "18.5 s of speech, 2.2× faster than real time",
+      "status": "ok",
+      "resources": {
+        "cpu_avg": 65.8,
+        "ram_peak": 16841285632,
+        "engine_rss_peak": {},
+        "gpu_busy_avg": 8.5,
+        "gpu_busy_peak": 10.0,
+        "gpu_shared_peak": 175177728.0,
+        "gpu_dedicated_peak": 791371776.0
+      }
+    },
+    {
+      "name": "Voice: Hindi paragraph",
+      "kind": "voice",
+      "seconds": 6.9,
+      "audio_s": 15.8,
+      "realtime_x": 2.3,
+      "summary": "15.8 s of speech, 2.3× faster than real time",
+      "status": "ok",
+      "resources": {
+        "cpu_avg": 67.8,
+        "ram_peak": 16897273856,
+        "engine_rss_peak": {},
+        "gpu_busy_avg": 9.0,
+        "gpu_busy_peak": 9.9,
+        "gpu_shared_peak": 166518784.0,
+        "gpu_dedicated_peak": 702799872.0
+      }
+    },
+    {
+      "name": "Transcribe: English recording",
+      "kind": "transcribe",
+      "seconds": 5.4,
+      "audio_s": 18.5,
+      "engine": "cuda",
+      "model": "stt-whisper-turbo",
+      "word_accuracy": 100.0,
+      "realtime_x": 3.4,
+      "summary": "100% words right, 3.4× real time on CUDA",
+      "status": "ok",
+      "resources": {
+        "cpu_avg": 26.3,
+        "ram_peak": 17217560576,
+        "engine_rss_peak": {},
+        "gpu_busy_avg": 6.8,
+        "gpu_busy_peak": 7.1,
+        "gpu_shared_peak": 248307712.0,
+        "gpu_dedicated_peak": 1593479168.0
+      }
+    },
+    {
+      "name": "Transcribe: Hindi recording",
+      "kind": "transcribe",
+      "seconds": 5.3,
+      "audio_s": 15.8,
+      "engine": "cuda",
+      "model": "stt-whisper-turbo",
+      "word_accuracy": 83.3,
+      "realtime_x": 3.0,
+      "summary": "83% words right, 3.0× real time on CUDA",
+      "status": "ok",
+      "resources": {
+        "cpu_avg": 26.4,
+        "ram_peak": 17229565952,
+        "engine_rss_peak": {
+          "ffmpeg": 16257024
+        },
+        "gpu_busy_avg": 7.5,
+        "gpu_busy_peak": 8.3,
+        "gpu_shared_peak": 251142144.0,
+        "gpu_dedicated_peak": 1643769856.0
+      }
+    },
+    {
+      "name": "Studio: make a complete Short (still pictures)",
+      "kind": "short",
+      "seconds": 291.3,
+      "video_s": 45.8,
+      "scenes": 6,
+      "summary": "45.8 s video",
+      "status": "ok",
+      "resources": {
+        "cpu_avg": 35.0,
+        "ram_peak": 24133279744,
+        "engine_rss_peak": {
+          "ffmpeg": 453259264,
+          "image": 6503305216,
+          "speech": 518348800
+        },
+        "gpu_busy_avg": 49.7,
+        "gpu_busy_peak": 99.8,
+        "gpu_shared_peak": 6059655168.0,
+        "gpu_dedicated_peak": 4120498176.0
+      }
+    }
+  ],
+  "windows": {
+    "os": "Microsoft Windows 11 Home Single Language 10.0.26300 build 26300",
+    "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+    "cores": 8,
+    "threads": 16,
+    "cpu_max_mhz": 3201,
+    "gpus": [
+      {
+        "name": "AMD Radeon(TM) Graphics",
+        "driver": "31.0.21921.13001",
+        "driver_date": "07/07/2025 05:30:00",
+        "ram_mb": 1024
+      },
+      {
+        "name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+        "driver": "32.0.16.2101",
+        "driver_date": "10/19/2026 05:30:00",
+        "ram_mb": 4095
+      }
+    ],
+    "ram_modules": [
+      {
+        "gb": 16,
+        "speed": 2400
+      },
+      {
+        "gb": 16,
+        "speed": 2400
+      }
+    ],
+    "power_plan": "Balanced",
+    "vulkan_runtime": true,
+    "model": "82K2",
+    "on_battery": false,
+    "battery_percent": 100,
+    "ram_total": 33130868736,
+    "ram_free_at_start": 17067372544,
+    "disk_free": 54045769728
+  },
+  "featherbox": {
+    "version": "0.2.0",
+    "hardware": {
+      "os": "Windows 11",
+      "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+      "cores": 8,
+      "threads": 16,
+      "ram_gb": 30.9,
+      "gpus": [
+        {
+          "vendor": "nvidia",
+          "name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+          "vram_mb": 4096,
+          "free_mb": 3965
+        },
+        {
+          "vendor": "amd",
+          "name": "AMD Radeon(TM) Graphics"
+        }
+      ],
+      "cuda_driver": 13.5,
+      "ram_free_gb": 15.9,
+      "vram_mb": 4096,
+      "vram_free_mb": 3965,
+      "recommended_backend": "cuda",
+      "backend": "cuda"
+    },
+    "ready": {
+      "llm": true,
+      "image": true,
+      "tts": true,
+      "ffmpeg": true
+    },
+    "settings": {
+      "backend": "auto",
+      "llm_model": null,
+      "image_model": "img-zimage-turbo",
+      "video_model": null,
+      "video_quality": "fast",
+      "voice": "af_heart",
+      "stt_model": null
+    },
+    "install": null,
+    "data": null
+  },
+  "installed": [
+    {
+      "id": "llama-cuda",
+      "name": "llama.cpp (NVIDIA CUDA)",
+      "category": "llm",
+      "kind": "engine",
+      "fit": "recommended",
+      "reason": "Matches this PC."
+    },
+    {
+      "id": "sd-cuda",
+      "name": "stable-diffusion.cpp (NVIDIA CUDA)",
+      "category": "image",
+      "kind": "engine",
+      "fit": "recommended",
+      "reason": "Matches this PC."
+    },
+    {
+      "id": "whisper-cpu",
+      "name": "whisper.cpp (CPU)",
+      "category": "stt",
+      "kind": "engine",
+      "fit": "recommended",
+      "reason": "Matches this PC."
+    },
+    {
+      "id": "whisper-cuda",
+      "name": "whisper.cpp (NVIDIA CUDA)",
+      "category": "stt",
+      "kind": "engine",
+      "fit": "recommended",
+      "reason": "Matches this PC."
+    },
+    {
+      "id": "ffmpeg",
+      "name": "FFmpeg",
+      "category": "tool",
+      "kind": "engine",
+      "fit": "recommended",
+      "reason": "Matches this PC."
+    },
+    {
+      "id": "llm-qwen3-4b",
+      "name": "Qwen3 4B Instruct",
+      "category": "llm",
+      "kind": "model",
+      "fit": "great",
+      "reason": "Fits fully in your 4 GB of graphics memory."
+    },
+    {
+      "id": "img-dreamshaper8",
+      "name": "DreamShaper 8 (SD 1.5)",
+      "category": "image",
+      "kind": "model",
+      "fit": "great",
+      "reason": "Fits in your 4 GB of graphics memory."
+    },
+    {
+      "id": "img-zimage-turbo",
+      "name": "Z-Image Turbo",
+      "category": "image",
+      "kind": "model",
+      "fit": "great",
+      "reason": "Fits in your 4 GB of graphics memory."
+    },
+    {
+      "id": "vid-wan22-5b",
+      "name": "Wan 2.2 Text/Image-to-Video 5B",
+      "category": "video",
+      "kind": "model",
+      "fit": "very-slow",
+      "reason": "Works best with 10 GB graphics memory (you have 4 GB). Part of it is kept in RAM, so it is slower per clip."
+    },
+    {
+      "id": "tts-kokoro",
+      "name": "Kokoro TTS v1.0",
+      "category": "tts",
+      "kind": "model",
+      "fit": "great",
+      "reason": "Runs on the processor (CPU) and is fast."
+    },
+    {
+      "id": "stt-whisper-base",
+      "name": "Whisper Base",
+      "category": "stt",
+      "kind": "model",
+      "fit": "great",
+      "reason": "Under a minute for 10 minutes of speech with the NVIDIA engine (about 1 min on the processor)."
+    },
+    {
+      "id": "stt-whisper-turbo",
+      "name": "Whisper Large v3 Turbo",
+      "category": "stt",
+      "kind": "model",
+      "fit": "great",
+      "reason": "Under a minute for 10 minutes of speech with the NVIDIA engine (about 6 min on the processor)."
+    }
+  ],
+  "active": {
+    "llm": "llm-qwen3-4b",
+    "image": "img-zimage-turbo",
+    "video": "vid-wan22-5b",
+    "stt": "stt-whisper-turbo"
+  },
+  "idle": {
+    "cpu_avg": 0.0,
+    "ram_peak": 16104124416,
+    "engine_rss_peak": {}
+  },
+  "finished": "2026-11-15T20:37:24",
+  "note": "Reference run on the developer laptop (Ryzen 7 5800H + RTX 3050 4 GB, CUDA engines)."
+}
