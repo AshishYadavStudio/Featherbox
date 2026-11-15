@@ -6,6 +6,8 @@
 entirely on your own computer: no cloud, no account, no subscription. It's built for ordinary laptops
 with 4–6 GB graphics cards (and works on CPU-only PCs, more slowly).
 
+![The Featherbox Library: five finished vertical videos made on a laptop with a 4 GB graphics card](docs/img/library.webp)
+
 - **Models**: a catalog of text, image, video and voice models, each with plain "will it run on this PC?"
   advice. Download any of them, pick which one is used, or add your own Hugging Face links.
 - **Chat** with a local text model.
@@ -15,6 +17,17 @@ with 4–6 GB graphics cards (and works on CPU-only PCs, more slowly).
   or a voice recording directly, with any installed model.
 - **Transcribe**: turn a recording, a voice note or a video into text and subtitles (SRT/VTT) with
   Whisper, in 99 languages including Hindi.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Studio: topic, language, length and tone, then Write script](docs/img/studio.webp) | ![Image: prompt, model, shape and style, with a generated tea stall picture](docs/img/image.webp) |
+| **Studio**: a topic in, a finished Short out | **Image**: describe a picture and your PC paints it |
+| ![Video: start from a picture, describe the motion, pick model and quality](docs/img/video.webp) | ![Voice: text box, voice picker grouped by language and a speed slider](docs/img/voice.webp) |
+| **Video**: short AI clips from text or a picture | **Voice**: natural voiceovers in English, Hindi and more |
+| ![Transcribe: a podcast intro transcribed line by line with timestamps](docs/img/transcribe.webp) | ![Models: hardware detection and plain advice for every model](docs/img/models.webp) |
+| **Transcribe**: speech to text and subtitles | **Models**: "will it run on this PC?" for every model |
 
 ## Install (for users)
 
