@@ -24,7 +24,11 @@ const NAV: { id: Page; label: string; icon: typeof Clapperboard }[] = [
 ];
 
 export default function App() {
-  const [page, setPage] = useState<Page>(() => store<Page>("featherbox.page", "studio"));
+  const [page, setPage] = useState<Page>(() => {
+    // deep link: http://127.0.0.1:8420/#transcribe opens that page
+    const hash = location.hash.slice(1) as Page;
+    return NAV.some((n) => n.id === hash) ? hash : store<Page>("featherbox.page", "studio");
+  });
   const [sys, setSys] = useState<SystemInfo | null>(null);
   const [offline, setOffline] = useState(false);
 

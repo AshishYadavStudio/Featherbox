@@ -117,7 +117,7 @@ class STTEngine:
         out_json.unlink(missing_ok=True)
         segs = []
         for s in data.get("transcription", []):
-            text = s.get("text", "").strip()
+            text = re.sub(r"^[-–]\s*", "", s.get("text", "").strip())   # Whisper marks speaker turns with "- "
             if text:
                 off = s.get("offsets", {})
                 segs.append({"start": round(off.get("from", 0) / 1000, 2), "end": round(off.get("to", 0) / 1000, 2),

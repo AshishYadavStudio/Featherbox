@@ -1,5 +1,7 @@
 # Featherbox
 
+**Website:** https://ashishyadavstudio.github.io/Featherbox/ · **Download:** [latest release](https://github.com/AshishYadavStudio/Featherbox/releases/latest)
+
 **Local AI, light on your PC.** One app that downloads and runs text, image, video, voice and speech-to-text AI models
 entirely on your own computer: no cloud, no account, no subscription. It's built for ordinary laptops
 with 4–6 GB graphics cards (and works on CPU-only PCs, more slowly).
