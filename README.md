@@ -230,6 +230,11 @@ cd frontend && npm run dev
 The data folder can be moved with the `FEATHERBOX_DATA` environment variable (the old `SRIJAN_DATA`
 still works).
 
+## License
+
+Featherbox itself is released under the [MIT License](LICENSE). The AI engines and models it downloads
+keep their own licenses, listed below.
+
 ## Licenses of bundled/downloaded components
 
 | Component | License |
