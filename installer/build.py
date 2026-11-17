@@ -160,6 +160,8 @@ def main() -> None:
     copytree(ROOT / "backend/app", STAGE / "app/backend/app", {"__pycache__"})
     shutil.copy2(ROOT / "backend/run.py", STAGE / "app/backend/run.py")
     shutil.copytree(ROOT / "frontend/dist", STAGE / "app/frontend/dist")
+    # inside app\ so updates replace it and uninstall removes it (a file in the install root would be left behind)
+    shutil.copy2(ROOT / "LICENSE", STAGE / "app/LICENSE.txt")
     step("Pre-compiling Python files (faster first start)")
     compileall.compile_dir(STAGE / "python/Lib", quiet=2, workers=0)
     compileall.compile_dir(STAGE / "app/backend", quiet=2, workers=0)

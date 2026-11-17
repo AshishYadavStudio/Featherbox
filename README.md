@@ -230,6 +230,14 @@ cd frontend && npm run dev
 The data folder can be moved with the `FEATHERBOX_DATA` environment variable (the old `SRIJAN_DATA`
 still works).
 
+Tests use only Python's built-in `unittest` (nothing extra is installed, so nothing extra ships in the
+installer, which bundles `backend/.venv`). They run in a throwaway data folder, never your real one, and
+GitHub Actions runs them on every push together with a web UI type check and build:
+
+```bash
+backend/.venv/Scripts/python -m unittest discover -s tests -t .
+```
+
 ## License
 
 Featherbox itself is released under the [MIT License](LICENSE). The AI engines and models it downloads

@@ -106,6 +106,27 @@ def word_accuracy(ref: str, hyp: str) -> float:
     return max(0.0, 100.0 * (1 - prev[-1] / len(r)))
 
 
+def parse_llama_log(lt: str) -> dict:
+    """Speed, GPU layers and device from llama-server's log (the last request wins)."""
+    out: dict = {}
+    pe = re.findall(r"prompt eval time =\s*([\d.]+) ms /\s*(\d+) tokens.*?([\d.]+) tokens per second", lt)
+    ev = re.findall(r"(?<!prompt )eval time =\s*([\d.]+) ms /\s*(\d+) tokens.*?([\d.]+) tokens per second", lt)
+    if ev:
+        out["gen_tokens"], out["gen_tok_s"] = int(ev[-1][1]), float(ev[-1][2])
+    if pe:
+        out["prompt_tok_s"] = float(pe[-1][2])
+    m = re.findall(r"offloaded (\d+)/(\d+) layers to GPU", lt)
+    if m:
+        out["gpu_layers"] = f"{m[-1][0]}/{m[-1][1]}"
+    # names can contain brackets ("AMD Radeon(TM) 860M Graphics (AMD proprietary driver) | uma: 1")
+    dev = (re.findall(r"using device (\w+) \((.+?)\) - ", lt)
+           or re.findall(r"ggml_vulkan: \d+ = ([^|\n]+?)(?:\s+\([^()]*\))?\s*\|", lt)
+           or re.findall(r"assigned to device ((?:Vulkan|CUDA)\d+)", lt))
+    if dev:
+        out["device"] = " ".join(dev[-1]) if isinstance(dev[-1], tuple) else dev[-1].strip()
+    return out
+
+
 # ---------------------------------------------------------------- resource sampling
 class Sampler:
     """CPU / RAM every second (psutil) and GPU busy % + GPU memory every ~2 s (Windows performance counters)."""
@@ -375,19 +396,7 @@ $o | ConvertTo-Json -Depth 4
         out = {"seconds": round(total, 1), "first_word_s": round(first or total, 1), "chars": len(text),
                "model": self.system.get("settings", {}).get("llm_model") or self.report.get("active", {}).get("llm")}
         try:
-            lt = llog.read_text("utf-8", errors="replace")
-            pe = re.findall(r"prompt eval time =\s*([\d.]+) ms /\s*(\d+) tokens.*?([\d.]+) tokens per second", lt)
-            ev = re.findall(r"(?<!prompt )eval time =\s*([\d.]+) ms /\s*(\d+) tokens.*?([\d.]+) tokens per second", lt)
-            if ev:
-                out["gen_tokens"], out["gen_tok_s"] = int(ev[-1][1]), float(ev[-1][2])
-            if pe:
-                out["prompt_tok_s"] = float(pe[-1][2])
-            m = re.findall(r"offloaded (\d+)/(\d+) layers to GPU", lt)
-            if m:
-                out["gpu_layers"] = f"{m[-1][0]}/{m[-1][1]}"
-            dev = re.findall(r"using device (\w+) \(([^)]+)\)", lt) or re.findall(r"ggml_vulkan: \d+ = ([^|(\n]+)", lt)
-            if dev:
-                out["device"] = " ".join(dev[-1]) if isinstance(dev[-1], tuple) else dev[-1].strip()
+            out.update(parse_llama_log(llog.read_text("utf-8", errors="replace")))
         except OSError:
             pass
         if cold:
