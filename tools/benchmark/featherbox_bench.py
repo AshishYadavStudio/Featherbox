@@ -579,7 +579,7 @@ $o | ConvertTo-Json -Depth 4
         self.report["finished"] = dt.datetime.now().isoformat(timespec="seconds")
         logs = self.out / "logs"
         logs.mkdir(exist_ok=True)
-        for name in ("llama-server.log", "sd.log", "whisper.log", "app.log"):
+        for name in ("llama-server.log", "sd.log", "whisper.log", "app.log", "text-replies.log"):
             src = self.data / "logs" / name
             if src.exists():
                 data = src.read_bytes()[-400_000:]          # the recent part is what matters

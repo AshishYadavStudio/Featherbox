@@ -75,6 +75,14 @@ def _clean_tag(tag: str) -> str:
     return out.strip("_")
 
 
+def split_hashtags(raw) -> list[str]:
+    """At most 8 clean, unique hashtags. Also splits "#volcanoes #geology" written as one item, which
+    the plain-reply fallback doesn't prevent (nor more than 8)."""
+    items = raw if isinstance(raw, list) else [raw] if isinstance(raw, str) else []
+    parts = (p for h in items if isinstance(h, str) for p in re.split(r"[#,]+", h))
+    return list(dict.fromkeys(t for t in map(_clean_tag, parts) if t))[:8]
+
+
 def _slug(text: str, fallback: str = "project") -> str:
     """ASCII folder-name slug; returns `fallback` when the text has no ASCII letters (e.g. Hindi)."""
     s = re.sub(r"[^a-zA-Z0-9]+", "-", text.lower()).strip("-")[:40]
@@ -120,11 +128,13 @@ Rules:
 - "description": 1–2 sentences for the upload description, in {lang}.
 - "hashtags": 5–8 relevant hashtags without the # sign."""
     data = llm.chat_json([{"role": "system", "content": system}, {"role": "user", "content": user}],
-                         schema=script_schema(language), temperature=0.6, max_tokens=2000)
-    tags = (_clean_tag(h) for h in data.get("hashtags", []))
-    data["hashtags"] = list(dict.fromkeys(t for t in tags if t))
+                         schema=script_schema(language), temperature=0.6, max_tokens=2000,
+                         # the user can add these before rendering; a small model sometimes forgets them
+                         defaults={"description": "", "hashtags": []})
+    data["hashtags"] = split_hashtags(data.get("hashtags"))
     for sc in data.get("scenes", []):
         sc.pop("fact", None)
+        sc.pop("description", None)   # small models sometimes put the upload description in every scene
     data["topic"], data["tone"], data["language"] = topic, tone, language
     job.update(1.0, "Script ready")
     return data
