@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Clapperboard, Download, FolderOpen, ImagePlus, RotateCcw, Trash2, Wand2, X } from "lucide-react";
-import { api, post, save, store, type Creation, type ToolOptions } from "../api";
+import { api, fmtAbout, post, save, store, type Creation, type Estimates, type ToolOptions } from "../api";
 import { JobProgress, PageLoading, Segmented, ago, ctrlEnter, fmtSecs, useJob } from "../components/ToolKit";
 import { STYLES } from "./Studio";
 
@@ -21,10 +21,14 @@ export default function ImageTool({ goModels, onAnimate, canAnimate }: {
   const [items, setItems] = useState<Creation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Creation | null>(null);
+  const [est, setEst] = useState<Estimates | null>(null);   // this PC's timings (refreshed after each run)
   // a job started before you left this page is picked up again; its pictures appear when it finishes
   const { job, running, run, cancel } = useJob("image", (f) => { if (f.status === "error") setError(f.error); load(); });
 
-  const load = () => api<Creation[]>("/api/creations/image").then(setItems).catch(() => {});
+  const load = () => {
+    api<Creation[]>("/api/creations/image").then(setItems).catch(() => {});
+    api<Estimates>("/api/estimates").then(setEst).catch(() => {});
+  };
   useEffect(() => {
     api<ToolOptions>("/api/tools/options").then(setOpts).catch((e) => setError(e.message));
     load();
@@ -128,6 +132,9 @@ export default function ImageTool({ goModels, onAnimate, canAnimate }: {
             <button className="btn primary big full" disabled={!form.prompt.trim() || !model} onClick={generate} title="Ctrl+Enter">
               <Wand2 size={18} /> Create {form.count > 1 ? `${form.count} images` : "image"}
             </button>
+          )}
+          {est?.picture_s != null && model === opts?.active.image && (
+            <p className="muted tiny">About {fmtAbout(est.picture_s).replace("about ", "")} per picture on this PC{form.count > 1 ? `, ${fmtAbout(est.picture_s * form.count)} for ${form.count}` : ""}.</p>
           )}
         </aside>
 

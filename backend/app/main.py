@@ -26,7 +26,7 @@ from .engines.tts import tts
 from .engines.stt import LANGUAGES as STT_LANGUAGES, stt
 from .jobs import GPU_LOCK, jobs
 from .recipes import topic_to_short as t2s
-from . import tools, updates
+from . import timings, tools, updates
 
 app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -291,6 +291,17 @@ def tts_preview(req: TTSPreview) -> Response:
 
 
 # ---------------------------------------------------------------- standalone tools
+@app.get("/api/estimates")
+def estimates() -> dict:
+    """Typical durations measured on this PC (timings.py), for "about N min" hints. None = never timed here."""
+    img = _active(image_engine)
+    vid = _active(video_engine)
+    return {"picture_s": timings.typical(f"image:{img}") if img else None,
+            "clip_s": {q: timings.typical(f"video:{vid}:{q}") if vid else None for q in ("fast", "best")},
+            "edit_still_s": timings.typical("edit:still"), "edit_ai_s": timings.typical("edit:ai"),
+            "assemble_s": timings.typical("assemble")}
+
+
 @app.get("/api/tools/options")
 def tool_options() -> dict:
     def models(category: str, engine) -> list[dict]:
