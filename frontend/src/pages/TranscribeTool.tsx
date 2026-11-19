@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Download, FileAudio, FolderOpen, Loader2, Mic, ScrollText, Square, Trash2, Upload, Wand2, X } from "lucide-react";
 import { api, post, save, store, type Catalog, type Creation, type TranscribeOptions } from "../api";
-import { JobProgress, ago, fmtSecs, useJob } from "../components/ToolKit";
+import { JobProgress, PageLoading, ago, fmtSecs, useJob } from "../components/ToolKit";
 
 type Form = { language: string; model: string; translate: boolean; prompt: string };
 const EMPTY: Form = { language: "auto", model: "", translate: false, prompt: "" };
@@ -158,7 +158,8 @@ export default function TranscribeTool({ goModels }: { goModels: () => void }) {
     } catch (e: any) { setError(e.message); } finally { setGettingGpu(false); }
   }
 
-  if (opts && !ready) {
+  if (!opts) return <PageLoading title="Transcribe" subtitle="Turn a recording, a voice note or a video into text and subtitles. Runs on this PC; nothing is uploaded anywhere." error={error} />;
+  if (!ready) {
     const busy = installing.find((c) => c.download && ["queued", "downloading", "extracting"].includes(c.download.status));
     const d = busy?.download;
     return (

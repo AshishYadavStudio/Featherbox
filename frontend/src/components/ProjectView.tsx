@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Clapperboard, Copy, FolderOpen, Image as ImageIcon, ImagePlus, Loader2, Mic, Music, Pause, Play, Wand2, X } from "lucide-react";
+import { ArrowLeft, Check, Clapperboard, Copy, FolderOpen, Image as ImageIcon, ImagePlus, Loader2, Mic, Music, Pause, Play, Wand2, X } from "lucide-react";
 import { Detached, activeJob, api, post, waitForJob, type Job, type ProjectDetail } from "../api";
 import MusicPicker from "./MusicPicker";
 
@@ -104,6 +104,7 @@ export default function ProjectView({ pid, onLoaded, onEdit, onNew, goLibrary }:
           <video key={p.video} src={p.video} controls autoPlay playsInline />
         </div>
         <div className="done-side">
+          {goLibrary && <button className="btn ghost small back-link" onClick={goLibrary}><ArrowLeft size={14} /> Library</button>}
           <div className="eyebrow ok"><Check size={14} /> Video ready · {p.duration}s</div>
           <h2>{s.title}</h2>
           <div className="card caption-box">
@@ -117,7 +118,6 @@ export default function ProjectView({ pid, onLoaded, onEdit, onNew, goLibrary }:
             <button className="btn" onClick={() => post(`/api/projects/${p.id}/reveal`)}><FolderOpen size={16} /> Open folder</button>
             {onEdit && <button className="btn" onClick={onEdit}>Edit script &amp; re-render</button>}
             {onNew && <button className="btn ghost" onClick={onNew}><Wand2 size={16} /> New video</button>}
-            {goLibrary && <button className="btn ghost" onClick={goLibrary}>Library</button>}
           </div>
 
           <div className="card music-card">

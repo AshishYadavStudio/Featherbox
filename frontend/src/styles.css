@@ -423,3 +423,8 @@ details.adv[open] summary::before { transform: rotate(90deg); }
 .video-setup-list { display: flex; flex-direction: column; gap: 8px; }
 .video-setup-item { display: flex; gap: 16px; align-items: center; padding: 12px 14px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); }
 @media (max-width: 720px) { .video-setup-item { flex-direction: column; align-items: stretch; } }
+/* page loading placeholder: invisible for quick loads, fades in after 400 ms */
+.page-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 48px; color: var(--muted);
+  opacity: 0; animation: fade-in .2s ease .4s forwards; }
+@keyframes fade-in { to { opacity: 1; } }
+.back-link { align-self: flex-start; }

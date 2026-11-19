@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Clapperboard, Download, FolderOpen, Image as ImageIcon, Loader2, Lock, RotateCcw, Trash2, Upload, Wand2, X } from "lucide-react";
 import { api, fmtMB, fmtSize, post, save, store, type Catalog, type Component, type Creation, type ToolOptions } from "../api";
-import { JobProgress, Segmented, ago, fmtSecs, useJob } from "../components/ToolKit";
+import { JobProgress, PageLoading, Segmented, ago, ctrlEnter, fmtSecs, useJob } from "../components/ToolKit";
 
 type Start = { ref: string; url: string } | null;
 type Form = { prompt: string; model: string; aspect: string; seed: string };
@@ -89,6 +89,7 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
     if (c.image) setStart({ ref: c.image, url: c.image.startsWith("upload:") ? `/creations/uploads/${c.image.slice(7)}.png` : `/creations/image/${c.image.slice(6)}.png` });
   };
 
+  if (!opts) return <PageLoading title="Video" subtitle="Make a short AI clip from a description, or bring one of your pictures to life." error={error} />;
   // No video model yet: show the whole page anyway (so people can see what it does and type a prompt),
   // with a card to download a model right here. Creating a clip stays locked until one is installed.
   const noModel = !!opts && !models.length;
@@ -132,7 +133,8 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
           <label className="lbl">{start ? "What should move?" : "Describe the clip"}</label>
           <textarea rows={4} value={form.prompt}
             placeholder={start ? "e.g. waves roll in, mist drifts, slow camera push" : "e.g. Waves rolling onto a beach at sunset, slow camera move"}
-            onChange={(e) => set({ prompt: e.target.value })} />
+            onChange={(e) => set({ prompt: e.target.value })}
+            onKeyDown={ctrlEnter(generate, !!form.prompt.trim() && !!model && !blocked && !running)} />
 
           <label className="lbl">Model</label>
           {noModel ? (
@@ -163,7 +165,7 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
               <Lock size={18} /> Get a video model to create clips
             </button>
           ) : running ? <JobProgress job={job} onCancel={cancel} /> : (
-            <button className="btn primary big full" disabled={!form.prompt.trim() || !model || blocked} onClick={generate}>
+            <button className="btn primary big full" disabled={!form.prompt.trim() || !model || blocked} onClick={generate} title="Ctrl+Enter">
               <Wand2 size={18} /> {start ? "Animate picture" : "Create clip"}
             </button>
           )}

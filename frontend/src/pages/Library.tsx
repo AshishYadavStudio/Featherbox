@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, FolderOpen, SlidersHorizontal, Trash2, Wand2, X } from "lucide-react";
 import { api, post, type Project } from "../api";
+import { PageLoading } from "../components/ToolKit";
 
 export default function Library({ goStudio, openProject }: { goStudio: () => void; openProject: (pid: string) => void }) {
   const [items, setItems] = useState<Project[] | null>(null);
@@ -17,6 +18,8 @@ export default function Library({ goStudio, openProject }: { goStudio: () => voi
     load();
   }
 
+  if (!items) return <PageLoading title="Library" subtitle="Every video you've made, stored on this PC." />;
+
   return (
     <div className="page">
       <header className="page-head row between">
@@ -27,7 +30,7 @@ export default function Library({ goStudio, openProject }: { goStudio: () => voi
         <button className="btn primary" onClick={goStudio}><Wand2 size={16} /> New video</button>
       </header>
 
-      {items && items.length === 0 && (
+      {items.length === 0 && (
         <div className="card empty">
           <h2>No videos yet</h2>
           <p className="muted">Your finished videos will appear here.</p>
@@ -35,7 +38,7 @@ export default function Library({ goStudio, openProject }: { goStudio: () => voi
       )}
 
       <div className="grid">
-        {items?.map((p) => (
+        {items.map((p) => (
           <button key={p.id} className="tile" onClick={() => setOpen(p)}>
             <div className="tile-media">
               {p.thumb ? <img src={p.thumb} alt="" loading="lazy" /> : <div className="tile-ph">{p.status === "rendering" ? "Unfinished" : "No preview"}</div>}
