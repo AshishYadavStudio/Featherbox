@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Clapperboard, Download, FolderOpen, Image as ImageIcon, Loader2, RotateCcw, Trash2, Upload, Wand2, X } from "lucide-react";
 import { api, post, save, store, type Creation, type ToolOptions } from "../api";
-import { JobProgress, Segmented, ago, fmtSecs, useJob } from "../components/ToolKit";
+import { JobProgress, PageLoading, Segmented, ago, ctrlEnter, fmtSecs, useJob } from "../components/ToolKit";
 
 type Start = { ref: string; url: string } | null;
 type Form = { prompt: string; model: string; aspect: string; seed: string };
@@ -89,7 +89,8 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
     if (c.image) setStart({ ref: c.image, url: c.image.startsWith("upload:") ? `/creations/uploads/${c.image.slice(7)}.png` : `/creations/image/${c.image.slice(6)}.png` });
   };
 
-  if (opts && !models.length) {
+  if (!opts) return <PageLoading title="Video" subtitle="Make a short AI clip from a description, or bring one of your pictures to life." error={error} />;
+  if (!models.length) {
     return (
       <div className="page">
         <header className="page-head"><h1>Video</h1></header>
@@ -139,7 +140,8 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
           <label className="lbl">{start ? "What should move?" : "Describe the clip"}</label>
           <textarea rows={4} value={form.prompt}
             placeholder={start ? "e.g. waves roll in, mist drifts, slow camera push" : "e.g. Waves rolling onto a beach at sunset, slow camera move"}
-            onChange={(e) => set({ prompt: e.target.value })} />
+            onChange={(e) => set({ prompt: e.target.value })}
+            onKeyDown={ctrlEnter(generate, !!form.prompt.trim() && !!model && !blocked && !running)} />
 
           <label className="lbl">Model</label>
           <select value={model} onChange={(e) => set({ model: e.target.value })}>
@@ -162,7 +164,7 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
           </details>
 
           {running ? <JobProgress job={job} onCancel={cancel} /> : (
-            <button className="btn primary big full" disabled={!form.prompt.trim() || !model || blocked} onClick={generate}>
+            <button className="btn primary big full" disabled={!form.prompt.trim() || !model || blocked} onClick={generate} title="Ctrl+Enter">
               <Wand2 size={18} /> {start ? "Animate picture" : "Create clip"}
             </button>
           )}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { AudioLines, Download, FolderOpen, Loader2, RotateCcw, Trash2, Wand2, X } from "lucide-react";
 import { api, post, save, store, type Creation, type Voice } from "../api";
-import { ago, fmtSecs } from "../components/ToolKit";
+import { PageLoading, ago, ctrlEnter, fmtSecs } from "../components/ToolKit";
 
 type Form = { text: string; voice: string; speed: number };
 const EMPTY: Form = { text: "", voice: "af_heart", speed: 1 };
@@ -54,7 +54,8 @@ export default function VoiceTool({ goModels }: { goModels: () => void }) {
     load();
   }
 
-  if (voices && !voices.length) {
+  if (!voices) return <PageLoading title="Voice" subtitle="Turn text into natural speech for voiceovers, narration or audiobooks. Runs on your processor, so any PC can do it." />;
+  if (!voices.length) {
     return (
       <div className="page">
         <header className="page-head"><h1>Voice</h1></header>
@@ -83,7 +84,8 @@ export default function VoiceTool({ goModels }: { goModels: () => void }) {
             <span className={`tiny ${form.text.length > MAX ? "err" : "muted"}`}>{form.text.length} / {MAX}</span>
           </div>
           <textarea rows={9} value={form.text} placeholder="Type or paste what should be spoken. English or Hindi (हिंदी) both work."
-            onChange={(e) => set({ text: e.target.value })} />
+            onChange={(e) => set({ text: e.target.value })}
+            onKeyDown={ctrlEnter(generate, !busy && !!form.text.trim() && form.text.length <= MAX)} />
           {mismatch && firstHindi && (
             <p className="tiny" style={{ color: "var(--warn)" }}>
               This looks like Hindi. <button className="link" onClick={() => set({ voice: firstHindi.id })}>Use a Hindi voice</button>
@@ -102,7 +104,7 @@ export default function VoiceTool({ goModels }: { goModels: () => void }) {
           <label className="lbl">Speed · {form.speed.toFixed(2)}×</label>
           <input type="range" min={0.7} max={1.4} step={0.05} value={form.speed} onChange={(e) => set({ speed: Number(e.target.value) })} />
 
-          <button className="btn primary big full" disabled={busy || !form.text.trim() || form.text.length > MAX} onClick={generate}>
+          <button className="btn primary big full" disabled={busy || !form.text.trim() || form.text.length > MAX} onClick={generate} title="Ctrl+Enter">
             {busy ? <Loader2 size={18} className="spin" /> : <Wand2 size={18} />} {busy ? "Speaking…" : "Create speech"}
           </button>
           <p className="muted tiny">Usually a few seconds; long texts take a little longer.</p>

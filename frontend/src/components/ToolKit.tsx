@@ -62,6 +62,32 @@ export function JobProgress({ job, onCancel, queued = "Waiting for the GPU (anot
   );
 }
 
+/** Shown while a page fetches what it needs, so it never flashes an empty form or a wrong "not set up" card.
+ *  The placeholder fades in after a short delay, so quick loads show nothing at all. */
+export function PageLoading({ title, subtitle, error }: { title: string; subtitle?: string; error?: string | null }) {
+  return (
+    <div className="page wide">
+      <header className="page-head">
+        <h1>{title}</h1>
+        {subtitle && <p className="muted">{subtitle}</p>}
+      </header>
+      {error ? (
+        <div className="banner error">
+          <span>Couldn't load this page: {error}</span>
+          <button className="btn small" onClick={() => window.location.reload()}>Try again</button>
+        </div>
+      ) : (
+        <div className="card page-loading"><Loader2 size={18} className="spin" /> Loading…</div>
+      )}
+    </div>
+  );
+}
+
+/** onKeyDown for a prompt box: Ctrl+Enter (Cmd+Enter on a Mac) runs `fn` when `ok`. */
+export const ctrlEnter = (fn: () => void, ok: boolean) => (e: React.KeyboardEvent) => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && ok) { e.preventDefault(); fn(); }
+};
+
 export const ago = (t: number) => {
   const s = Math.max(1, Math.round(Date.now() / 1000 - t));
   if (s < 60) return "just now";
