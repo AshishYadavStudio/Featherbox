@@ -213,6 +213,17 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px;
   border-radius: 12px; background: var(--accent-soft); border: 1px solid rgba(255, 122, 26, .3);
 }
+.setup-cta.running { flex-direction: column; align-items: stretch; }
+.setup-cta-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex: 1; }
+.setup-progress { display: flex; flex-direction: column; gap: 8px; }
+.setup-items { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.setup-items li { display: grid; grid-template-columns: 18px minmax(120px, 1.2fr) minmax(80px, 2fr) minmax(0, 1.6fr); gap: 10px; align-items: center; font-size: 13px; }
+.setup-items li.failed .setup-item-state { color: var(--bad); }
+.setup-item-icon { display: flex; }
+.setup-item-icon .ok { color: var(--ok); }
+.setup-item-icon .bad { color: var(--bad); }
+.setup-item-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.setup-item-state { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .group { display: flex; flex-direction: column; gap: 10px; }
 .model-list { display: flex; flex-direction: column; gap: 8px; }
 .model { display: flex; gap: 16px; align-items: center; padding: 14px 16px; }
@@ -281,6 +292,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   .editor-side { position: static; }
   .setup-hw { grid-template-columns: 1fr 1fr; }
   .setup-cta { flex-direction: column; align-items: stretch; }
+  .setup-cta-head { flex-direction: column; align-items: stretch; }
+  .setup-items li { grid-template-columns: 18px 1fr; }
+  .setup-items li .bar, .setup-items li .setup-item-state { grid-column: 2; }
   .form-grid { grid-template-columns: 1fr; }
 }
 
@@ -401,4 +415,4 @@ details.adv[open] summary::before { transform: rotate(90deg); }
 .notes-body { white-space: pre-wrap; overflow-y: auto; font-size: 14px; line-height: 1.6; color: var(--text); }
 .card.updates { margin-top: 28px; display: grid; gap: 12px; }
 .card.updates p { margin: 4px 0 0; }
-.ok-ic { color: var(--ok, #34d399); vertical-align: -2px; }
+.ok-ic { color: var(--ok); vertical-align: -2px; }

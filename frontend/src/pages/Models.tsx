@@ -44,6 +44,11 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
 
   const missing = items.filter((c) => recommended.includes(c.id) && !c.installed);
   const missingMB = missing.reduce((n, c) => n + c.download_mb, 0);
+  // What one-click setup is (or was) installing: still missing, or downloaded in this session.
+  // Finished items stay in the list so the overall bar doesn't jump backwards as they complete.
+  const setupItems = items.filter((c) => recommended.includes(c.id) && (!c.installed || c.download));
+  const setupBusy = setupItems.some((c) => c.download && BUSY.includes(c.download.status));
+  const setupStarted = setupItems.some((c) => c.download);
   const hw = sys?.hardware;
 
   const act = async (fn: () => Promise<unknown>) => { setError(null); try { await fn(); } catch (e: any) { setError(e.message); } load(); };
@@ -83,18 +88,27 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
             </select>
           </div>
         </div>
-        <div className="setup-cta">
+        <div className={`setup-cta ${setupStarted && missing.length ? "running" : ""}`}>
           {missing.length === 0 && items.length > 0 ? (
             <div className="eyebrow ok"><Check size={14} /> Everything your PC needs is installed</div>
           ) : (
             <>
-              <div>
-                <h3>One-click setup</h3>
-                <p className="muted small">Installs the best engine and models for this PC: {missing.map((c) => c.name).join(", ") || "…"}.</p>
+              <div className="setup-cta-head">
+                <div>
+                  <h3>One-click setup</h3>
+                  <p className="muted small">
+                    {setupBusy ? "Downloading and installing. You can keep using the app; this page updates every second."
+                      : `Installs the best engine and models for this PC: ${missing.map((c) => c.name).join(", ") || "…"}.`}
+                  </p>
+                </div>
+                {!setupBusy && (
+                  <button className="btn primary big" disabled={!missing.length || active} onClick={() => act(() => post("/api/setup"))}>
+                    {active ? <Loader2 size={18} className="spin" /> : <Rocket size={18} />}{" "}
+                    {active ? "Installing…" : setupStarted ? `Resume (${fmtSize(missingMB)})` : `Install (${fmtSize(missingMB)})`}
+                  </button>
+                )}
               </div>
-              <button className="btn primary big" disabled={!missing.length || active} onClick={() => act(() => post("/api/setup"))}>
-                {active ? <Loader2 size={18} className="spin" /> : <Rocket size={18} />} {active ? "Installing…" : `Install (${fmtSize(missingMB)})`}
-              </button>
+              {setupStarted && <SetupProgress items={setupItems} />}
             </>
           )}
         </div>
@@ -151,6 +165,73 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
       </section>
 
       <UpdatesCard />
+    </div>
+  );
+}
+
+const BUSY = ["queued", "downloading", "extracting"];
+const MiB = 1024 * 1024;
+
+function fmtEta(secs: number): string {
+  if (!isFinite(secs) || secs <= 0) return "";
+  if (secs < 60) return "less than a minute left";
+  const m = Math.ceil(secs / 60);
+  return m < 60 ? `about ${m} min left` : `about ${Math.floor(m / 60)} h ${m % 60} min left`;
+}
+
+/** Overall and per-item progress of one-click setup (the downloads run in parallel on the backend). */
+function SetupProgress({ items }: { items: Component[] }) {
+  const rows = items.map((c) => {
+    const d = c.download;
+    const total = d?.total || c.download_mb * MiB;
+    const done = !d ? 0 : d.status === "done" ? total : Math.min(d.done, total);
+    return { c, d, total, done };
+  });
+  const total = rows.reduce((n, r) => n + r.total, 0);
+  const done = rows.reduce((n, r) => n + r.done, 0);
+  const speed = rows.reduce((n, r) => n + (r.d?.status === "downloading" ? r.d.speed : 0), 0);
+  const pct = total ? Math.min(100, (done / total) * 100) : 0;
+  const finished = rows.filter((r) => r.c.installed).length;
+  const failed = rows.filter((r) => r.d?.status === "error").length;
+  const unpacking = rows.some((r) => r.d?.status === "extracting");
+
+  return (
+    <div className="setup-progress">
+      <div className="row between wrap">
+        <strong>{Math.floor(pct)}%</strong>
+        <span className="muted small">
+          {fmtMB(done)} of {fmtMB(total)}
+          {speed > 0 && <> · {fmtMB(speed)}/s · {fmtEta((total - done) / speed)}</>}
+          {unpacking && speed === 0 && <> · unpacking…</>}
+        </span>
+      </div>
+      <div className="bar big" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.floor(pct)}>
+        <div style={{ width: `${pct}%` }} />
+      </div>
+      <div className="muted tiny">
+        {finished} of {rows.length} installed{failed ? ` · ${failed} failed (press Resume to try again)` : ""}
+      </div>
+      <ul className="setup-items">
+        {rows.map(({ c, d, total, done }) => {
+          const p = total ? Math.min(100, (done / total) * 100) : 0;
+          let icon = <Loader2 size={14} className="spin" />;
+          let text = "Starting…";
+          if (c.installed) { icon = <Check size={14} className="ok" />; text = "Installed"; }
+          else if (!d) { icon = <Download size={14} className="muted" />; text = "Not started"; }
+          else if (d.status === "error") { icon = <X size={14} className="bad" />; text = d.error || "Failed"; }
+          else if (d.status === "cancelled") { icon = <X size={14} className="muted" />; text = `Paused at ${fmtMB(done)}`; }
+          else if (d.status === "extracting") text = "Unpacking…";
+          else if (d.status === "downloading") text = `${fmtMB(done)} of ${fmtMB(total)}${d.speed ? ` · ${fmtMB(d.speed)}/s` : ""}`;
+          return (
+            <li key={c.id} className={d?.status === "error" ? "failed" : ""}>
+              <span className="setup-item-icon">{icon}</span>
+              <span className="setup-item-name" title={c.name}>{c.name}</span>
+              <div className="bar"><div style={{ width: `${c.installed ? 100 : p}%` }} /></div>
+              <span className="setup-item-state tiny muted" title={text}>{text}</span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
