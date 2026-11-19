@@ -428,3 +428,22 @@ details.adv[open] summary::before { transform: rotate(90deg); }
   opacity: 0; animation: fade-in .2s ease .4s forwards; }
 @keyframes fade-in { to { opacity: 1; } }
 .back-link { align-self: flex-start; }
+/* ---------------- background job status (sidebar) ---------------- */
+.job-status { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px;
+  background: var(--accent-soft); border: 1px solid rgba(255, 122, 26, .3); }
+.job-status-main { display: flex; align-items: center; gap: 8px; width: 100%; padding: 0; border: 0; background: none;
+  color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+.job-status-main > svg { flex: none; color: var(--accent); }
+.job-status-main.finished { cursor: default; }
+.job-status-main.finished.done > svg { color: var(--ok); }
+.job-status-main.finished.error > svg { color: var(--bad); }
+.job-status-text { flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.job-status-label { font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-status-stage { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-status-pct { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.job-status-more { font-size: 11.5px; color: var(--muted); }
+.job-status-notify { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; align-self: flex-start; }
+@media (max-width: 900px) {
+  .job-status { flex: none; max-width: 240px; padding: 6px 10px; }
+  .job-status-stage, .job-status-more, .job-status-notify, .job-status .bar { display: none; }
+}
