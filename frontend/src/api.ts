@@ -24,6 +24,7 @@ export type Component = {
   name: string; description: string; size_mb: number; download_mb: number; license: string; backend: string | null;
   installed: boolean; fit: string; reason: string; tags: string[]; studio: boolean; soon: boolean;
   custom: boolean; url: string | null; download: DownloadTask | null;
+  i2v?: boolean;   // video models: can animate a picture (image-to-video)
 };
 export type Catalog = {
   components: Component[]; recommended: string[];

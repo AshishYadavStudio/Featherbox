@@ -127,7 +127,7 @@ def _component(c: catalog.Component, hw: dict) -> dict:
             "description": c.description, "size_mb": c.size_mb, "download_mb": c.download_mb(),
             "license": c.license, "backend": c.backend, "installed": c.is_installed(),
             "fit": fit, "reason": reason, "tags": c.tags, "studio": c.studio, "soon": c.soon,
-            "custom": c.custom, "url": c.meta.get("url"), "download": _task(c.id)}
+            "custom": c.custom, "url": c.meta.get("url"), "i2v": bool(c.meta.get("i2v")), "download": _task(c.id)}
 
 
 def _task(cid: str) -> dict | None:

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { Clapperboard, Download, FolderOpen, Image as ImageIcon, Loader2, RotateCcw, Trash2, Upload, Wand2, X } from "lucide-react";
-import { api, post, save, store, type Creation, type ToolOptions } from "../api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Clapperboard, Download, FolderOpen, Image as ImageIcon, Loader2, Lock, RotateCcw, Trash2, Upload, Wand2, X } from "lucide-react";
+import { api, fmtMB, fmtSize, post, save, store, type Catalog, type Component, type Creation, type ToolOptions } from "../api";
 import { JobProgress, Segmented, ago, fmtSecs, useJob } from "../components/ToolKit";
 
 type Start = { ref: string; url: string } | null;
@@ -89,19 +89,11 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
     if (c.image) setStart({ ref: c.image, url: c.image.startsWith("upload:") ? `/creations/uploads/${c.image.slice(7)}.png` : `/creations/image/${c.image.slice(6)}.png` });
   };
 
-  if (opts && !models.length) {
-    return (
-      <div className="page">
-        <header className="page-head"><h1>Video</h1></header>
-        <div className="card empty">
-          <Clapperboard size={28} />
-          <h3>No video model yet</h3>
-          <p className="muted">Download one in Models → Video. Wan 2.2 5B can bring your pictures to life, even on a 4 GB card.</p>
-          <button className="btn primary" onClick={goModels}>Open Models</button>
-        </div>
-      </div>
-    );
-  }
+  // No video model yet: show the whole page anyway (so people can see what it does and type a prompt),
+  // with a card to download a model right here. Creating a clip stays locked until one is installed.
+  const noModel = !!opts && !models.length;
+  const reloadOpts = () => api<ToolOptions>("/api/tools/options")
+    .then((o) => { setOpts(o); setQuality(o.video_quality); }).catch((e) => setError(e.message));
 
   return (
     <div className="page wide">
@@ -110,6 +102,7 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
         <p className="muted">Make a short AI clip from a description, or bring one of your pictures to life.</p>
       </header>
       {error && <div className="banner error"><span>{error}</span><button className="icon-btn" onClick={() => setError(null)}><X size={16} /></button></div>}
+      {noModel && <VideoModelSetup onReady={reloadOpts} goModels={goModels} />}
 
       <div className="tool">
         <aside className="card tool-form">
@@ -142,9 +135,13 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
             onChange={(e) => set({ prompt: e.target.value })} />
 
           <label className="lbl">Model</label>
-          <select value={model} onChange={(e) => set({ model: e.target.value })}>
-            {models.map((m) => <option key={m.id} value={m.id}>{m.name}{m.i2v ? "" : " (text only)"}</option>)}
-          </select>
+          {noModel ? (
+            <select disabled><option>No video model yet (download one above)</option></select>
+          ) : (
+            <select value={model} onChange={(e) => set({ model: e.target.value })}>
+              {models.map((m) => <option key={m.id} value={m.id}>{m.name}{m.i2v ? "" : " (text only)"}</option>)}
+            </select>
+          )}
 
           <label className="lbl">Shape</label>
           <Segmented value={form.aspect} onChange={(aspect) => set({ aspect })}
@@ -161,7 +158,11 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
             <input value={form.seed} placeholder="Random" inputMode="numeric" onChange={(e) => set({ seed: e.target.value.replace(/[^0-9]/g, "") })} />
           </details>
 
-          {running ? <JobProgress job={job} onCancel={cancel} /> : (
+          {noModel ? (
+            <button className="btn primary big full" disabled title="Download a video model first">
+              <Lock size={18} /> Get a video model to create clips
+            </button>
+          ) : running ? <JobProgress job={job} onCancel={cancel} /> : (
             <button className="btn primary big full" disabled={!form.prompt.trim() || !model || blocked} onClick={generate}>
               <Wand2 size={18} /> {start ? "Animate picture" : "Create clip"}
             </button>
@@ -218,5 +219,129 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
         </div>
       )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ no video model yet */
+const BUSY = ["queued", "downloading", "extracting"];
+const FIT: Record<string, [string, string]> = {
+  great: ["Runs well", "ok"], recommended: ["Runs well", "ok"], slow: ["Runs slowly", "warn"],
+  "very-slow": ["Slow on this PC", "warn"], "too-big": ["Probably won't run", "bad"], "other-backend": ["For other hardware", "dim"],
+};
+
+/** Pick and download a video model without leaving the page. Also fetches the stable-diffusion.cpp
+ *  engine if it is missing (video runs on the same engine as pictures). Calls onReady once a model works. */
+function VideoModelSetup({ onReady, goModels }: { onReady: () => void; goModels: () => void }) {
+  const [cat, setCat] = useState<Catalog | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => api<Catalog>("/api/catalog").then(setCat).catch((e) => setErr(e.message)), []);
+
+  const all = cat?.components ?? [];
+  // image-to-video first: it animates your own pictures, so it is the one to recommend
+  const videos = all.filter((c) => c.kind === "model" && c.category === "video" && !c.soon)
+    .sort((a, b) => Number(!!b.i2v) - Number(!!a.i2v));
+  const engines = all.filter((c) => c.kind === "engine" && c.id.startsWith("sd-"));
+  const engineOk = engines.some((c) => c.installed);
+  const engine = engineOk ? null : engines.find((c) => cat?.recommended.includes(c.id)) ?? null;
+  const busy = [...videos, ...engines].some((c) => c.download && BUSY.includes(c.download.status));
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { const t = setInterval(load, busy ? 1000 : 5000); return () => clearInterval(t); }, [load, busy]);
+
+  // Done: make the model that was just downloaded the one in use, then unlock the page.
+  const ready = engineOk ? videos.find((c) => c.installed) : undefined;
+  const fired = useRef(false);
+  useEffect(() => {
+    if (!ready || fired.current) return;
+    fired.current = true;
+    const fresh = videos.find((c) => c.installed && c.download?.status === "done") ?? ready;
+    api("/api/settings", { method: "PATCH", body: JSON.stringify({ video_model: fresh.id }) }).catch(() => {}).finally(onReady);
+  }, [ready?.id]);
+
+  async function install(c: Component) {
+    if (c.fit === "too-big" && !confirm(`${c.name} probably won't run on this PC.\n${c.reason}\n\nDownload it anyway?`)) return;
+    setErr(null);
+    try {
+      if (engine) await post(`/api/catalog/${engine.id}/install`);
+      await post(`/api/catalog/${c.id}/install`);
+    } catch (e: any) { setErr(e.message); }
+    load();
+  }
+  async function pause(c: Component) {
+    await post(`/api/catalog/${c.id}/cancel`).catch(() => {});
+    if (engine?.download && BUSY.includes(engine.download.status)) await post(`/api/catalog/${engine.id}/cancel`).catch(() => {});
+    load();
+  }
+
+  return (
+    <section className="card video-setup">
+      <div className="row between wrap">
+        <div>
+          <h3><Clapperboard size={18} /> Get a video model to start</h3>
+          <p className="muted small">
+            This page needs one AI video model: a one-time download, then it works offline. Have a look around below;
+            your prompt and picture are kept while it downloads.
+          </p>
+        </div>
+        <button className="btn ghost small" onClick={goModels}>All models</button>
+      </div>
+      {err && <div className="err tiny">{err}</div>}
+      {!cat && <p className="muted small"><Loader2 size={14} className="spin" /> Checking what fits this PC…</p>}
+      <div className="video-setup-list">
+        {videos.map((c, i) => {
+          const d = c.download;
+          const mine = !!d && d.status !== "done";                 // this model has a download going, paused or failed
+          const rowBusy = !!d && BUSY.includes(d.status);
+          const parts = [c, ...(engine && mine ? [engine] : [])].filter((x) => x.download);
+          const total = parts.reduce((n, x) => n + (x.download!.total || x.download_mb * 1048576), 0);
+          const done = parts.reduce((n, x) => n + (x.installed || x.download!.status === "done"
+            ? x.download!.total : Math.min(x.download!.done, x.download!.total)), 0);
+          const speed = parts.reduce((n, x) => n + (x.download!.status === "downloading" ? x.download!.speed : 0), 0);
+          const pct = total ? Math.min(100, (done / total) * 100) : 0;
+          const unpacking = parts.some((x) => x.download!.status === "extracting");
+          const [fitText, fitTone] = FIT[c.fit] ?? [c.fit, "dim"];
+          const sizeMB = c.download_mb + (engine ? engine.download_mb : 0);
+          let state = `${Math.floor(pct)}% · ${fmtMB(done)} of ${fmtMB(total)}${speed ? ` · ${fmtMB(speed)}/s` : ""}`;
+          if (d?.status === "cancelled") state = `Paused at ${fmtMB(done)} of ${fmtMB(total)}`;
+          else if (unpacking) state = "Unpacking…";
+          else if (d?.status === "queued") state = "Starting…";
+          return (
+            <div key={c.id} className="video-setup-item">
+              <div className="model-info">
+                <div className="row wrap">
+                  <strong>{c.name}</strong>
+                  {i === 0 && c.i2v && <span className="badge accent">Recommended</span>}
+                  <span className="badge">{c.i2v ? "Animates your pictures" : "Text only"}</span>
+                  <span className={`badge ${fitTone}`}>{fitText}</span>
+                </div>
+                <div className="muted small">{c.description}</div>
+                {c.fit !== "great" && c.fit !== "recommended" && <div className="small">{c.reason}</div>}
+                <div className="muted tiny">
+                  {fmtSize(sizeMB)} to download{engine ? ` (includes the ${fmtSize(engine.download_mb)} picture and video engine)` : ""} · {c.license}
+                </div>
+                {mine && (
+                  <div className="dl">
+                    <div className="bar"><div style={{ width: `${pct}%` }} /></div>
+                    <div className="muted tiny">
+                      {d!.status === "error" ? <span className="err">{d!.error || "Download failed"}</span> : state}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="model-act">
+                {c.installed && !engineOk ? <span className="badge"><Loader2 size={12} className="spin" /> Waiting for the engine</span>
+                  : c.installed ? <span className="badge ok"><Check size={12} /> Installed</span>
+                  : rowBusy ? <button className="btn small" onClick={() => pause(c)}><X size={14} /> Pause</button>
+                  : (
+                    <button className={`btn small ${i === 0 ? "primary" : ""}`} disabled={busy} onClick={() => install(c)}>
+                      <Download size={14} /> {d?.status === "cancelled" || d?.status === "error" ? "Resume" : "Download"}
+                    </button>
+                  )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
