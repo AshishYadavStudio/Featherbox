@@ -11,6 +11,7 @@ import VoiceTool from "./pages/VoiceTool";
 import TranscribeTool from "./pages/TranscribeTool";
 import { UpdateBanner } from "./components/Updates";
 import { JobStatus } from "./components/JobStatus";
+import { LaunchAnimation, shouldPlayLaunch } from "./components/LaunchAnimation";
 
 export type Page = "studio" | "image" | "video" | "voice" | "transcribe" | "chat" | "library" | "models";
 
@@ -34,6 +35,7 @@ export default function App() {
   const [sys, setSys] = useState<SystemInfo | null>(null);
   const [offline, setOffline] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [intro, setIntro] = useState(shouldPlayLaunch);   // the launch animation, once per window
 
   useEffect(() => save("featherbox.page", page), [page]);
 
@@ -110,6 +112,7 @@ export default function App() {
         {page === "chat" && <Chat sys={sys} goModels={() => setPage("models")} />}
         {page === "models" && <Models sys={sys} />}
       </main>
+      {intro && <LaunchAnimation onDone={() => setIntro(false)} />}
     </div>
   );
 }
