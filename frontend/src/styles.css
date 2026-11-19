@@ -402,3 +402,8 @@ details.adv[open] summary::before { transform: rotate(90deg); }
 .card.updates { margin-top: 28px; display: grid; gap: 12px; }
 .card.updates p { margin: 4px 0 0; }
 .ok-ic { color: var(--ok, #34d399); vertical-align: -2px; }
+
+/* ---------------- launch animation ---------------- */
+.launch { position: fixed; inset: 0; z-index: 1000; background: #ff5a52; transition: opacity .32s ease; cursor: pointer; }
+.launch svg { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
+.launch.fading { opacity: 0; pointer-events: none; }
