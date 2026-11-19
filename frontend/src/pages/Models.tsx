@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Download, ExternalLink, Link2, Loader2, Plus, Rocket, Trash2, X } from "lucide-react";
 import { UpdatesCard } from "../components/Updates";
+import { PageLoading } from "../components/ToolKit";
 import { api, fmtMB, fmtSize, post, type Catalog, type Component, type SystemInfo } from "../api";
 
 /** Advice only: every model can still be downloaded. */
@@ -54,6 +55,9 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
   const meta = TABS.find((t) => t.id === tab)!;
   const inUse = tab === "llm" || tab === "image" || tab === "video" || tab === "stt" ? cat?.active[tab] : null;
   const inUseName = items.find((c) => c.id === inUse)?.name;
+
+  // until the catalog arrives, don't draw the page with empty data ("Install (0 MB)", "Nothing here runs well")
+  if (!cat) return <PageLoading title="Models" subtitle="Download engines and AI models once. After that everything works offline." error={error} />;
 
   return (
     <div className="page">

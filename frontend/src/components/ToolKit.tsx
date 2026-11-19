@@ -63,7 +63,7 @@ export function JobProgress({ job, onCancel, queued = "Waiting for the GPU (anot
 }
 
 /** Shown while a page fetches what it needs, so it never flashes an empty form or a wrong "not set up" card.
- *  The placeholder fades in after a short delay, so quick loads show nothing at all. */
+ *  The placeholder fades in after 400 ms, so quick loads (most pages, ~0.25 s for Models) show only the title. */
 export function PageLoading({ title, subtitle, error }: { title: string; subtitle?: string; error?: string | null }) {
   return (
     <div className="page wide">
