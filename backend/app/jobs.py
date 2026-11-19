@@ -31,6 +31,7 @@ class Job:
     error: str | None = None
     result: Any = None
     ref: str | None = None         # what the job works on (e.g. "<project>:<scene>"), so a page can find it again
+    info: dict = field(default_factory=dict)   # live details for the UI while it runs (e.g. scenes painted so far)
     created: float = field(default_factory=time.time)
     finished: float | None = None
     _cancel: bool = False
@@ -53,7 +54,7 @@ class Job:
     def to_dict(self) -> dict:
         return {k: getattr(self, k) for k in
                 ("id", "kind", "title", "status", "progress", "stage", "error", "result",
-                 "ref", "created", "finished")}
+                 "ref", "info", "created", "finished")}
 
 
 class JobManager:

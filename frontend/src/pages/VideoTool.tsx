@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Clapperboard, Download, FolderOpen, Image as ImageIcon, Loader2, RotateCcw, Trash2, Upload, Wand2, X } from "lucide-react";
-import { api, post, save, store, type Creation, type ToolOptions } from "../api";
+import { api, fmtAbout, post, save, store, type Creation, type Estimates, type ToolOptions } from "../api";
 import { JobProgress, Segmented, ago, fmtSecs, useJob } from "../components/ToolKit";
 
 type Start = { ref: string; url: string } | null;
@@ -18,10 +18,14 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [quality, setQuality] = useState("fast");
+  const [est, setEst] = useState<Estimates | null>(null);   // this PC's timings (refreshed after each clip)
   const file = useRef<HTMLInputElement>(null);
   const { job, running, run, cancel } = useJob("video", (f) => { if (f.status === "error") setError(f.error); load(); });
 
-  const load = () => api<Creation[]>("/api/creations/video").then(setItems).catch(() => {});
+  const load = () => {
+    api<Creation[]>("/api/creations/video").then(setItems).catch(() => {});
+    api<Estimates>("/api/estimates").then(setEst).catch(() => {});
+  };
   useEffect(() => {
     api<ToolOptions>("/api/tools/options").then((o) => { setOpts(o); setQuality(o.video_quality); }).catch((e) => setError(e.message));
     load();
@@ -153,7 +157,11 @@ export default function VideoTool({ goModels }: { goModels: () => void }) {
 
           <label className="lbl">Quality</label>
           <Segmented value={quality} onChange={changeQuality} options={[["fast", "Fast"], ["best", "Best quality"]]} />
-          <p className="muted tiny">About 2 s of video, {TIME[quality] ?? TIME.fast} on a 4 GB GPU (faster on bigger cards).</p>
+          <p className="muted tiny">
+            {est?.clip_s[quality as "fast" | "best"] != null && model === opts?.active.video
+              ? `About 2 s of video, ${fmtAbout(est.clip_s[quality as "fast" | "best"]!)} on this PC (from your recent clips).`
+              : `About 2 s of video, ${TIME[quality] ?? TIME.fast} on a 4 GB GPU (faster on bigger cards).`}
+          </p>
 
           <details className="adv">
             <summary className="lbl">Advanced</summary>

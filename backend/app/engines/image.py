@@ -4,10 +4,11 @@ from __future__ import annotations
 import random
 import re
 import subprocess
+import time
 from pathlib import Path
 from typing import Callable
 
-from .. import catalog, config, hardware
+from .. import catalog, config, hardware, timings
 from ..jobs import Cancelled
 from .llm import llm
 
@@ -67,7 +68,10 @@ class ImageEngine:
                 cmd += ["--vae-tiling"]
             if vram and vram < m.get("vram_mb", 3000) + 2048 and m.get("arch") != "sd15":
                 cmd += ["--offload-to-cpu"]   # keep weights in RAM, stream them to the GPU as needed
-        return _run_sd(cmd, exe, out, "Image engine", on_progress, is_cancelled)
+        t0 = time.monotonic()
+        path = _run_sd(cmd, exe, out, "Image engine", on_progress, is_cancelled)
+        timings.record(f"image:{comp.id}", time.monotonic() - t0)   # whole wait: engine start, load, paint
+        return path
 
 
 def _run_sd(cmd: list[str], exe: Path, out: Path, what: str,
@@ -179,9 +183,12 @@ class VideoEngine:
                 cmd += ["--temporal-tiling", "--vae-tile-size", "128x128", "--vae-tile-overlap", "0.25"]
             if vram < m.get("vram_mb", 8000) + 2048:
                 cmd += ["--offload-to-cpu"]
-        return _run_sd(cmd, exe, out, "Video engine", on_progress, is_cancelled,
+        t0 = time.monotonic()
+        path = _run_sd(cmd, exe, out, "Video engine", on_progress, is_cancelled,
                        # Best: decoding is ~2/3 of the time on 4 GB; Fast: it takes seconds
                        phases=[(0.0, 0.97), (0.97, 1.0)] if fast else [(0.0, 0.35), (0.35, 1.0)], steps=m["steps"])
+        timings.record(f"video:{comp.id}:{'fast' if fast else 'best'}", time.monotonic() - t0)
+        return path
 
 
 image_engine = ImageEngine()
