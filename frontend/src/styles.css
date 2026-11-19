@@ -415,4 +415,11 @@ details.adv[open] summary::before { transform: rotate(90deg); }
 .notes-body { white-space: pre-wrap; overflow-y: auto; font-size: 14px; line-height: 1.6; color: var(--text); }
 .card.updates { margin-top: 28px; display: grid; gap: 12px; }
 .card.updates p { margin: 4px 0 0; }
-.ok-ic { color: var(--ok); vertical-align: -2px; }
+.ok-ic { color: var(--ok, #34d399); vertical-align: -2px; }
+
+/* ---------------- video page: no model yet ---------------- */
+.video-setup { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; border-color: rgba(255, 122, 26, .3); background: var(--accent-soft); }
+.video-setup h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
+.video-setup-list { display: flex; flex-direction: column; gap: 8px; }
+.video-setup-item { display: flex; gap: 16px; align-items: center; padding: 12px 14px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); }
+@media (max-width: 720px) { .video-setup-item { flex-direction: column; align-items: stretch; } }
