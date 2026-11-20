@@ -139,10 +139,33 @@ Engines. Each model gets advice for *this* PC, but nothing is ever blocked: you 
   `.safetensors` checkpoints). The link is checked and the size read before it is added. Gated models
   (which need a Hugging Face login) are not supported yet. User-added text models are placed on the
   GPU automatically by llama.cpp (`--fit on`).
-- Files shared by several models (the Flux VAE, Qwen3 4B used by Z-Image, the umt5 video encoder) are
-  downloaded once and only deleted when no installed model needs them.
-- Image architectures supported by the engine: SD 1.5, SDXL, FLUX.1 and Z-Image. Piper and MusicGen
-  are listed as coming soon.
+- Files shared by several models (the Flux VAE, Qwen3 4B used by Z-Image, the umt5 video encoder, the
+  Wan 2.2 VAE) are downloaded once and only deleted when no installed model needs them.
+- Image architectures used by the catalog: SD 1.5, SDXL, FLUX.1, FLUX.3, Z-Image and Qwen-Image 2.1.
+  Piper and MusicGen are listed as coming soon.
+
+### Added in November 2026 (marked "New")
+
+| Kind | Models |
+|---|---|
+| Text | Qwen3.5 2B, 4B and 9B; Gemma 4 E2B, E4B and 12B; Qwen3.6 35B-A3B (needs 32 GB+ RAM) |
+| Image | FLUX.3 Image Klein (6–8 GB GPU, works on 4 GB with offloading); Qwen-Image 2.1 Turbo (10–12 GB GPU) |
+| Video | Wan 2.2 5B Turbo: the same model distilled to 4 steps, so clips take a fraction of the time |
+
+Their download links and sizes are verified, and their settings follow stable-diffusion.cpp's and
+llama.cpp's documentation, but they have not yet been run on our test PCs. The new text models use
+llama.cpp's own memory fitting (`--fit on`), because their designs (Gemma 4's shared and sliding-window
+memory, Qwen3.5's hybrid layers) don't suit Featherbox's simple per-layer estimate. Neither family
+"thinks" before answering unless asked, so script writing stays fast.
+
+Not added yet:
+- **Voice:** no new model works with the current engines. Kokoro v1.0 and Whisper Large v3 Turbo are
+  still the newest of their kinds. Newer voices (Kitten TTS 2, OmniVoice, IndicF5 for Indian
+  languages) need a new voice engine.
+- **Bigger video models** (LTX-2.3/2.5, MiniMax-H3): their main model alone is 10 GB or more, plus a
+  12–32B text encoder, which is impractical on 4–8 GB GPUs.
+- **LingBot-Video 1.3B:** light, but it expects long structured JSON scene descriptions instead of
+  plain prompts.
 
 ## Image, Video and Voice tools
 
@@ -248,12 +271,14 @@ keep their own licenses, listed below.
 | Component | License |
 |---|---|
 | llama.cpp, stable-diffusion.cpp | MIT |
-| Qwen2.5 / Qwen3 models, Mistral Nemo, Sarvam-M | Apache-2.0 |
+| Qwen2.5 / Qwen3 / Qwen3.5 / Qwen3.6 models, Gemma 4, Mistral Nemo, Sarvam-M | Apache-2.0 |
 | Llama 3.1 / 3.2 | Llama Community License |
 | Gemma 3 | Gemma Terms of Use |
 | DreamShaper 8, Realistic Vision 6, Counterfeit 2.5, Juggernaut XL | CreativeML OpenRAIL-M |
 | DreamShaper XL Lightning | OpenRAIL++ |
-| Z-Image Turbo, FLUX.1 schnell, Wan 2.1 / 2.2 | Apache-2.0 |
+| Z-Image Turbo, FLUX.1 schnell, Wan 2.1 / 2.2 (and Wan 2.2 5B Turbo) | Apache-2.0 |
+| FLUX.3 Image Klein | FLUX Kommunity License (check before commercial use) |
+| Qwen-Image 2.1 Turbo | Qwen Research License (not for commercial use) |
 | Kokoro TTS | Apache-2.0 |
 | whisper.cpp, Whisper models (OpenAI), Silero VAD | MIT |
 | FFmpeg (BtbN GPL build) | GPL |

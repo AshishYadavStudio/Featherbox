@@ -63,6 +63,60 @@ class FitAdvice(unittest.TestCase):
                 self.assertIn(cid, ids)
 
 
+class CatalogEntries(unittest.TestCase):
+    """Mistakes in a model entry that would only show up when someone downloads or runs it."""
+
+    def test_ids_unique(self):
+        ids = [c.id for c in catalog.CATALOG]
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_image_and_video_files_have_engine_flags(self):
+        from app.engines.image import _FLAGS
+        for c in catalog.CATALOG:
+            if c.kind == "model" and c.category in ("image", "video"):
+                roles = [f.role for f in c.files]
+                for r in roles:
+                    self.assertIn(r, _FLAGS, f"{c.id}: no command-line flag for role {r!r}")
+                self.assertTrue({"model", "diffusion"} & set(roles), f"{c.id}: nothing to load as the model")
+                for key in ("width", "height", "steps", "cfg", "vram_mb"):
+                    self.assertIn(key, c.meta, f"{c.id}: meta lacks {key}")
+                self.assertEqual(c.meta["width"] % 32, 0, c.id)
+                self.assertEqual(c.meta["height"] % 32, 0, c.id)
+
+    def test_text_models_have_memory_data(self):
+        for c in catalog.CATALOG:
+            if c.kind == "model" and c.category == "llm":
+                self.assertIn("ctx", c.meta, c.id)
+                self.assertGreater(c.meta.get("kv_mb_per_1k", 0), 0, c.id)
+
+    def test_shared_files_agree(self):
+        """A file shared by several models (same place on disk) must be the same download everywhere."""
+        seen: dict[str, tuple[str, int, str]] = {}
+        for c in catalog.CATALOG:
+            for f in c.files:
+                if f.extract_to:
+                    continue
+                key = (f.url, f.size_mb)
+                if f.dest in seen:
+                    self.assertEqual(seen[f.dest][:2], key, f"{f.dest} differs between {seen[f.dest][2]} and {c.id}")
+                else:
+                    seen[f.dest] = (*key, c.id)
+
+    def test_files_are_downloadable_links(self):
+        for c in catalog.CATALOG:
+            for f in c.files:
+                self.assertTrue(f.url.startswith("https://"), f"{c.id}: {f.url}")
+                self.assertNotIn("/blob/", f.url, f"{c.id}: a page link, not a download link")
+                self.assertGreater(f.size_mb, 0, f"{c.id}: {f.dest}")
+
+    def test_new_models_reuse_shared_files(self):
+        turbo, wan = catalog.get("vid-wan22-5b-turbo"), catalog.get("vid-wan22-5b")
+        self.assertEqual({f.dest for f in turbo.files} - {f.dest for f in wan.files},
+                         {"models/video/Wan2_2-TI2V-5B-Turbo-Q4_K_M.gguf"}, "only the Turbo model itself is extra")
+        self.assertIn("--sigmas", catalog.get("img-qwen-image21-turbo").meta["extra"])
+        self.assertNotIn("layers", catalog.get("llm-gemma4-e2b").meta, "Gemma 4 is fitted by llama.cpp")
+
+
 class GraphicsNames(unittest.TestCase):
     def test_short_names(self):
         self.assertEqual(catalog._gpu_short("AMD Radeon(TM) 860M Graphics"), "Radeon 860M")

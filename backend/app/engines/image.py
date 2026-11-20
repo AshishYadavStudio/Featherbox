@@ -59,6 +59,7 @@ class ImageEngine:
             cmd += ["-n", negative]
         if m.get("scheduler"):
             cmd += ["--scheduler", m["scheduler"]]
+        cmd += m.get("extra", [])          # model-specific options, e.g. Qwen-Image Turbo's fixed schedule
         vram = hw.get("vram_mb", 0)
         if backend == "cpu":
             cmd += ["-t", str(hw["cores"])]

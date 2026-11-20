@@ -91,9 +91,16 @@ def _engine_files(prefix: str, names: list[tuple[str, int]], folder: str) -> lis
 
 
 def _llm(cid: str, name: str, repo: str, file: str, mb: int, desc: str, lic: str,
-         layers: int, kv_mb_per_1k: int, tags: list[str]) -> Component:
+         layers: int | None, kv_mb_per_1k: int, tags: list[str]) -> Component:
+    """layers=None: llama.cpp fits the model to free graphics memory itself (`--fit on`). Used for newer
+    designs (Gemma 4's shared and sliding-window memory, Qwen3.5's hybrid layers) that the simple
+    per-layer estimate in the text engine would get wrong. kv_mb_per_1k: memory per 1,000 tokens of
+    context at the 4,096-token context Featherbox uses, including fixed sliding-window buffers."""
+    meta = {"ctx": 4096, "kv_mb_per_1k": kv_mb_per_1k}
+    if layers is not None:
+        meta["layers"] = layers
     return Component(cid, "model", "llm", name, desc, [FileSpec(_hf(repo, file), f"models/llm/{file}", mb)],
-                     lic, tags=tags, meta={"layers": layers, "ctx": 4096, "kv_mb_per_1k": kv_mb_per_1k})
+                     lic, tags=tags, meta=meta)
 
 
 def _whisper(cid: str, name: str, file: str, mb: int, desc: str, tags: list[str], rtf: float,
@@ -129,6 +136,15 @@ _VAD = FileSpec(_hf("ggml-org/whisper-vad", "ggml-silero-v6.2.0.bin"),
                 "models/stt/ggml-silero-v6.2.0.bin", 1, role="vad")   # skips silence (stops "phantom" text)
 _UMT5 = FileSpec(_hf("city96/umt5-xxl-encoder-gguf", "umt5-xxl-encoder-Q4_K_M.gguf"),
                  "models/encoders/umt5-xxl-encoder-Q4_K_M.gguf", 3486, role="t5xxl")
+_WAN22_VAE = FileSpec(_hf("Comfy-Org/Wan-2.2", "split_files/vae/wan2.2_vae.safetensors"),
+                      "models/video/wan2.2_vae.safetensors", 1344, role="vae")
+_WAN22_TAE = FileSpec("https://github.com/madebyollin/taehv/raw/refs/heads/main/safetensors/taew2_2.safetensors",
+                      "models/encoders/taew2_2.safetensors", 22, role="tae")
+# FLUX.2's VAE, which FLUX.3 uses too (Black Forest Labs' own repos need a Hugging Face login; this copy doesn't)
+_FLUX2_VAE = FileSpec(_hf("Comfy-Org/Flux-2-Klein-4B", "split_files/vae/flux2-vae.safetensors"),
+                      "models/encoders/flux2-vae.safetensors", 321, role="vae")
+_QWEN3VL_4B = FileSpec(_hf("Qwen/Qwen3-VL-4B-Instruct-GGUF", "Qwen3VL-4B-Instruct-Q4_K_M.gguf"),
+                       "models/encoders/Qwen3VL-4B-Instruct-Q4_K_M.gguf", 2382)
 
 
 CATALOG: list[Component] = [
@@ -218,6 +234,29 @@ CATALOG: list[Component] = [
          "Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf", 17697,
          "Very smart and surprisingly fast for its size. Needs about 32 GB of RAM.", "Apache-2.0", 48, 96,
          ["High quality"]),
+        # ---- 2026 releases (sizes and memory per token read from each file's GGUF header) ----
+        ("llm-qwen35-2b", "Qwen3.5 2B", "unsloth/Qwen3.5-2B-GGUF", "Qwen3.5-2B-Q4_K_M.gguf", 1222,
+         "Qwen's newest small model (2026). Quick on any PC, and better at following instructions than "
+         "older 1–2B models.", "Apache-2.0", None, 12, ["New", "Fast"]),
+        ("llm-gemma4-e2b", "Gemma 4 E2B", "unsloth/gemma-4-E2B-it-qat-GGUF", "gemma-4-E2B-it-qat-UD-Q4_K_XL.gguf",
+         2499, "Google's newest small model (2026): writes like a 2B model, with extra built-in vocabulary "
+         "for 140 languages including Hindi and other Indian languages.", "Apache-2.0", None, 8,
+         ["New", "Indian languages"]),
+        ("llm-qwen35-4b", "Qwen3.5 4B", "unsloth/Qwen3.5-4B-GGUF", "Qwen3.5-4B-Q4_K_M.gguf", 2614,
+         "Successor to Qwen3 4B (2026): smarter at the same size and speed. Good at English and Hindi.",
+         "Apache-2.0", None, 32, ["New"]),
+        ("llm-gemma4-e4b", "Gemma 4 E4B", "unsloth/gemma-4-E4B-it-qat-GGUF", "gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf",
+         4020, "Google's 2026 model with the quality of a 4B and strong Indian-language skills. Best with a "
+         "6 GB GPU.", "Apache-2.0", None, 21, ["New", "Indian languages"]),
+        ("llm-qwen35-9b", "Qwen3.5 9B", "unsloth/Qwen3.5-9B-GGUF", "Qwen3.5-9B-Q4_K_M.gguf", 5417,
+         "Much smarter scripts than the small models (2026). Best with an 8 GB GPU.", "Apache-2.0", None, 32,
+         ["New", "High quality"]),
+        ("llm-gemma4-12b", "Gemma 4 12B", "google/gemma-4-12B-it-qat-q4_0-gguf", "gemma-4-12b-it-qat-q4_0.gguf",
+         6653, "Google's official 4-bit build (2026): high-quality writing and the best Indian-language skills "
+         "here. Needs a 10–12 GB GPU.", "Apache-2.0", None, 96, ["New", "Indian languages", "High quality"]),
+        ("llm-qwen36-35b-a3b", "Qwen3.6 35B-A3B", "unsloth/Qwen3.6-35B-A3B-GGUF", "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf",
+         21109, "The smartest model here (2026), and fast for its size because it only uses 3B of its 35B "
+         "at a time. Needs about 32 GB of RAM or more.", "Apache-2.0", None, 20, ["New", "High quality"]),
     ]],
     # ---- image (paint scenes) ----
     Component("img-dreamshaper8", "model", "image", "DreamShaper 8 (SD 1.5)",
@@ -282,6 +321,29 @@ CATALOG: list[Component] = [
               "Apache-2.0", tags=["High quality"],
               meta={"arch": "flux", "width": 576, "height": 1024, "steps": 4, "cfg": 1.0,
                     "sampler": "euler", "vram_mb": 8000}),
+    Component("img-flux3-klein", "model", "image", "FLUX.3 Image Klein",
+              "Black Forest Labs' newest compact model (October 2026): sharp, detailed pictures that follow the "
+              "prompt closely, including text in images. Best with a 6–8 GB GPU; works on 4 GB with part kept "
+              "in RAM. Free for personal use; read the license before commercial use.",
+              [FileSpec(_hf("leejet/flux-3-image-klein-GGUF", "flux3-image-klein-Q4_K.gguf"),
+                        "models/image/flux3-image-klein-Q4_K.gguf", 3351, role="diffusion"),
+               _FLUX2_VAE, dataclasses.replace(_QWEN3VL_4B, role="llm")],
+              "FLUX Kommunity License", tags=["New", "High quality"],
+              meta={"arch": "flux3", "width": 576, "height": 1024, "steps": 16, "cfg": 1.0,
+                    "sampler": "euler", "vram_mb": 6500}),
+    Component("img-qwen-image21-turbo", "model", "image", "Qwen-Image 2.1 Turbo",
+              "Qwen's 2026 image model in an 8-step version: excellent at scenes with several people and at "
+              "writing text in pictures, including Chinese. Large: best with a 10–12 GB GPU. Research license: "
+              "not for commercial use.",
+              [FileSpec(_hf("unsloth/Qwen-Image-2.1-Turbo-GGUF", "qwen-image-2.1-turbo-Q3_K_M.gguf"),
+                        "models/image/qwen-image-2.1-turbo-Q3_K_M.gguf", 3022, role="diffusion"),
+               FileSpec(_hf("Comfy-Org/Qwen-Image-2.1", "vae/qwen_image_2.1_vae_bf16.safetensors"),
+                        "models/encoders/qwen_image_2.1_vae_bf16.safetensors", 644, role="vae"),
+               FileSpec(_hf("Qwen/Qwen3-VL-8B-Instruct-GGUF", "Qwen3VL-8B-Instruct-Q4_K_M.gguf"),
+                        "models/encoders/Qwen3VL-8B-Instruct-Q4_K_M.gguf", 4795, role="llm")],
+              "Qwen Research License", tags=["New", "High quality"],
+              meta={"arch": "qwen-image", "width": 576, "height": 1024, "steps": 8, "cfg": 1.0,
+                    "sampler": "euler", "vram_mb": 10000, "extra": ["--sigmas", "qwen-image-2.1-turbo"]}),
     # ---- video (AI motion clips) ----
     Component("vid-wan21-1.3b", "model", "video", "Wan 2.1 Text-to-Video 1.3B",
               "Makes short AI clips from each scene's text prompt (it can't animate the painted picture). Lighter.",
@@ -299,14 +361,20 @@ CATALOG: list[Component] = [
               "Brings each painted scene to life (image-to-video), so the look stays the same. On a 4 GB GPU a clip takes about 2–3 min (Fast) or 6–7 min (Best).",
               [FileSpec(_hf("QuantStack/Wan2.2-TI2V-5B-GGUF", "Wan2.2-TI2V-5B-Q4_K_M.gguf"),
                         "models/video/Wan2.2-TI2V-5B-Q4_K_M.gguf", 3274, role="diffusion"),
-               _UMT5,
-               FileSpec(_hf("Comfy-Org/Wan-2.2", "split_files/vae/wan2.2_vae.safetensors"),
-                        "models/video/wan2.2_vae.safetensors", 1344, role="vae"),
-               FileSpec("https://github.com/madebyollin/taehv/raw/refs/heads/main/safetensors/taew2_2.safetensors",
-                        "models/encoders/taew2_2.safetensors", 22, role="tae")],
+               _UMT5, _WAN22_VAE, _WAN22_TAE],
               "Apache-2.0", tags=["Animates your scene pictures"],
               meta={"arch": "wan", "i2v": True, "width": 480, "height": 832, "frames": 33, "fps": 16,
                     "steps": 20, "cfg": 6.0, "flow_shift": 3.0, "vram_mb": 10000}),
+    Component("vid-wan22-5b-turbo", "model", "video", "Wan 2.2 5B Turbo",
+              "Wan 2.2 5B distilled to 4 steps: brings scene pictures to life several times faster than the "
+              "standard version, with slightly less detail. Shares its other files with Wan 2.2 5B, so it is "
+              "a small extra download if you have that.",
+              [FileSpec(_hf("hum-ma/Wan2.2-TI2V-5B-Turbo-GGUF", "Wan2_2-TI2V-5B-Turbo-Q4_K_M.gguf"),
+                        "models/video/Wan2_2-TI2V-5B-Turbo-Q4_K_M.gguf", 3279, role="diffusion"),
+               _UMT5, _WAN22_VAE, _WAN22_TAE],
+              "Apache-2.0", tags=["New", "Fastest video", "Animates your scene pictures"],
+              meta={"arch": "wan", "i2v": True, "width": 480, "height": 832, "frames": 33, "fps": 16,
+                    "steps": 4, "cfg": 1.0, "flow_shift": 5.0, "vram_mb": 10000}),
     # ---- voice ----
     Component("tts-kokoro", "model", "tts", "Kokoro TTS v1.0",
               "Natural voices in English (US/UK), Hindi and more. Runs fast on CPU.",
