@@ -75,7 +75,7 @@ class STTEngine:
             try:
                 return run(exe, True)
             except RuntimeError:
-                cpu = catalog.find_exe("whisper-cpu", ("whisper-cli.exe",))
+                cpu = catalog.find_exe("whisper-cpu", (catalog.exe_name("whisper-cli"),))
                 if not (cpu and catalog.get("whisper-cpu").is_installed()):
                     raise
                 exe = cpu           # out of graphics memory or a driver problem: the CPU engine still works

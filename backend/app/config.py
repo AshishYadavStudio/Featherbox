@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 from pathlib import Path
 
@@ -31,6 +32,12 @@ LLM_PORT = int(_env("LLM_PORT", "8421"))
 
 # Windows: keep engine processes from flashing console windows.
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
+
+# Which engine builds to download. FEATHERBOX_PLATFORM overrides it (tests check both catalogs on one PC).
+PLATFORM = _env("PLATFORM", "windows" if os.name == "nt" else "mac" if sys.platform == "darwin" else "linux")
+EXE = ".exe" if PLATFORM == "windows" else ""
+# Oldest CUDA version the NVIDIA driver must support for the CUDA engines (their builds differ per system).
+CUDA_MIN = 12.4 if PLATFORM == "windows" else 12.8
 
 _SETTINGS_FILE = DATA / "settings.json"
 _settings_lock = threading.Lock()

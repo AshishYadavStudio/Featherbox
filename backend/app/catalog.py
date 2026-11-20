@@ -19,9 +19,14 @@ LLAMA_TAG = "b12383"
 SD_TAG = "master-1104-5dcfa79"
 SD_HASH = SD_TAG.rsplit("-", 1)[1]
 WHISPER_TAG = "b5454"
+# stable-diffusion.cpp's Linux builds moved to Ubuntu 26.04 (glibc 2.43) on 3 Nov 2026; this is the newest
+# release built on Ubuntu 24.04, so it also runs on 24.04 LTS (and newer). It supports every model in the catalog.
+SD_TAG_LINUX = "master-1043-3be2378"
+SD_HASH_LINUX = SD_TAG_LINUX.rsplit("-", 1)[1]
 
 _GH_LLAMA = f"https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_TAG}/"
 _GH_SD = f"https://github.com/leejet/stable-diffusion.cpp/releases/download/{SD_TAG}/"
+_GH_SD_LINUX = f"https://github.com/leejet/stable-diffusion.cpp/releases/download/{SD_TAG_LINUX}/"
 _GH_WHISPER = f"https://github.com/ggml-org/whisper.cpp/releases/download/{WHISPER_TAG}/"
 _GH_KOKORO = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
 _FFMPEG = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
@@ -121,6 +126,105 @@ def stt_rtf(c: "Component", hw: dict, gpu: bool) -> float:
 # The CUDA runtime (cudart + cuBLAS) that llama.cpp ships; whisper.cpp's CUDA build uses the same 12.4 libraries.
 _LLAMA_CUDART = FileSpec(_GH_LLAMA + "cudart-llama-bin-win-cuda-12.4-x64.zip",
                          "bin/_dl/cudart-llama-bin-win-cuda-12.4-x64.zip", 391, extract_to="bin/llama-cuda")
+_FFMPEG_LINUX = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
+
+
+def _engines_windows() -> list["Component"]:
+    return [
+        Component("llama-cuda", "engine", "llm", "llama.cpp (NVIDIA CUDA)",
+                  "Text engine for NVIDIA GPUs. Fastest option for chat and script writing.",
+                  _engine_files(_GH_LLAMA, [(f"llama-{LLAMA_TAG}-bin-win-cuda-12.4-x64.zip", 319)], "llama-cuda")
+                  + [_LLAMA_CUDART],
+                  "MIT", backend="cuda"),
+        Component("llama-vulkan", "engine", "llm", "llama.cpp (Vulkan)",
+                  "Text engine for AMD / Intel / NVIDIA GPUs via Vulkan. Small download.",
+                  _engine_files(_GH_LLAMA, [(f"llama-{LLAMA_TAG}-bin-win-vulkan-x64.zip", 38)], "llama-vulkan"),
+                  "MIT", backend="vulkan"),
+        Component("llama-cpu", "engine", "llm", "llama.cpp (CPU)",
+                  "Text engine that runs on any PC without a GPU.",
+                  _engine_files(_GH_LLAMA, [(f"llama-{LLAMA_TAG}-bin-win-cpu-x64.zip", 25)], "llama-cpu"),
+                  "MIT", backend="cpu"),
+        Component("sd-cuda", "engine", "image", "stable-diffusion.cpp (NVIDIA CUDA)",
+                  "Image engine for NVIDIA GPUs.",
+                  _engine_files(_GH_SD, [(f"sd-master-{SD_HASH}-bin-win-cuda12-x64.zip", 412),
+                                         ("cudart-sd-bin-win-cu12-x64.zip", 563)], "sd-cuda"),
+                  "MIT", backend="cuda"),
+        Component("sd-vulkan", "engine", "image", "stable-diffusion.cpp (Vulkan)",
+                  "Image engine for AMD / Intel / NVIDIA GPUs via Vulkan.",
+                  _engine_files(_GH_SD, [(f"sd-master-{SD_HASH}-bin-win-vulkan-x64.zip", 30)], "sd-vulkan"),
+                  "MIT", backend="vulkan"),
+        Component("sd-cpu", "engine", "image", "stable-diffusion.cpp (CPU)",
+                  "Image engine for PCs without a GPU (slow: minutes per image).",
+                  _engine_files(_GH_SD, [(f"sd-master-{SD_HASH}-bin-win-cpu-x64.zip", 18)], "sd-cpu"),
+                  "MIT", backend="cpu"),
+        Component("whisper-cpu", "engine", "stt", "whisper.cpp (CPU)",
+                  "Speech-to-text engine. Runs on the processor of any PC, so it never competes with image or "
+                  "video jobs for the graphics card.",
+                  _engine_files(_GH_WHISPER, [("whisper-bin-x64.zip", 9)], "whisper-cpu"),
+                  "MIT"),
+        Component("whisper-cuda", "engine", "stt", "whisper.cpp (NVIDIA CUDA)",
+                  "Speech-to-text on the graphics card: about 20x faster than the CPU engine. Shares the CUDA "
+                  "libraries of the text engine, so only the speech parts are downloaded.",
+                  [FileSpec(_GH_WHISPER + "whisper-bin-win-cuda-12.4.0-x64.zip", "bin/_dl/whisper-cuda.zip", 258,
+                            extract_to="bin/whisper-cuda",
+                            members=("whisper-cli.exe", "whisper.dll", "ggml.dll", "ggml-base.dll", "ggml-cuda.dll",
+                                     "ggml-cpu-*")),
+                   _LLAMA_CUDART],
+                  "MIT", backend="cuda"),
+        Component("ffmpeg", "engine", "tool", "FFmpeg",
+                  "Video encoder used to assemble the final video. Skipped if already on your PATH.",
+                  [FileSpec(_FFMPEG, "bin/_dl/ffmpeg.zip", 200, extract_to="bin/ffmpeg")],
+                  "GPL"),
+    ]
+
+
+def _engines_linux() -> list["Component"]:
+    """Official Linux x86-64 builds of the same pinned versions. There is no CUDA build of stable-diffusion.cpp
+    or whisper.cpp for Linux, so NVIDIA PCs paint with Vulkan and transcribe on the processor."""
+    return [
+        Component("llama-cuda", "engine", "llm", "llama.cpp (NVIDIA CUDA)",
+                  "Text engine for NVIDIA GPUs. Fastest option for chat and script writing. Needs an NVIDIA "
+                  "driver for CUDA 12.8 or newer (version 570+).",
+                  _engine_files(_GH_LLAMA, [(f"llama-{LLAMA_TAG}-bin-ubuntu-cuda-12.8-x64.tar.gz", 190),
+                                            (f"cudart-llama-{LLAMA_TAG}-bin-ubuntu-cuda-12.8-x64.tar.gz", 566)],
+                                "llama-cuda"),
+                  "MIT", backend="cuda"),
+        Component("llama-vulkan", "engine", "llm", "llama.cpp (Vulkan)",
+                  "Text engine for AMD / Intel / NVIDIA GPUs via Vulkan. Small download. Needs the Vulkan "
+                  "driver (Ubuntu: mesa-vulkan-drivers).",
+                  _engine_files(_GH_LLAMA, [(f"llama-{LLAMA_TAG}-bin-ubuntu-vulkan-x64.tar.gz", 34)], "llama-vulkan"),
+                  "MIT", backend="vulkan"),
+        Component("llama-cpu", "engine", "llm", "llama.cpp (CPU)",
+                  "Text engine that runs on any PC without a GPU.",
+                  _engine_files(_GH_LLAMA, [(f"llama-{LLAMA_TAG}-bin-ubuntu-x64.tar.gz", 22)], "llama-cpu"),
+                  "MIT", backend="cpu"),
+        Component("sd-vulkan", "engine", "image", "stable-diffusion.cpp (Vulkan)",
+                  "Image and video engine for AMD / Intel / NVIDIA GPUs via Vulkan (on Linux this is the "
+                  "graphics-card engine for NVIDIA too).",
+                  _engine_files(_GH_SD_LINUX,
+                                [(f"sd-master-{SD_HASH_LINUX}-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip", 35)],
+                                "sd-vulkan"),
+                  "MIT", backend="vulkan"),
+        Component("sd-cpu", "engine", "image", "stable-diffusion.cpp (CPU)",
+                  "Image engine for PCs without a GPU (slow: minutes per image).",
+                  _engine_files(_GH_SD_LINUX, [(f"sd-master-{SD_HASH_LINUX}-bin-Linux-Ubuntu-24.04-x86_64.zip", 26)],
+                                "sd-cpu"),
+                  "MIT", backend="cpu"),
+        Component("whisper-cpu", "engine", "stt", "whisper.cpp (CPU)",
+                  "Speech-to-text engine. Runs on the processor of any PC, so it never competes with image or "
+                  "video jobs for the graphics card.",
+                  _engine_files(_GH_WHISPER, [("whisper-bin-ubuntu-x64.tar.gz", 9)], "whisper-cpu"),
+                  "MIT"),
+        Component("ffmpeg", "engine", "tool", "FFmpeg",
+                  "Video encoder used to assemble the final video. Skipped if already installed "
+                  "(Ubuntu: sudo apt install ffmpeg).",
+                  [FileSpec(_FFMPEG_LINUX, "bin/_dl/ffmpeg.tar.xz", 151, extract_to="bin/ffmpeg")],
+                  "GPL"),
+    ]
+
+
+def _engines() -> list["Component"]:
+    return {"windows": _engines_windows, "linux": _engines_linux}.get(config.PLATFORM, list)()
 
 
 # Files shared by several models (downloaded once; kept while any model that uses them is installed).
@@ -148,51 +252,8 @@ _QWEN3VL_4B = FileSpec(_hf("Qwen/Qwen3-VL-4B-Instruct-GGUF", "Qwen3VL-4B-Instruc
 
 
 CATALOG: list[Component] = [
-    # ---------------- engines ----------------
-    Component("llama-cuda", "engine", "llm", "llama.cpp (NVIDIA CUDA)",
-              "Text engine for NVIDIA GPUs. Fastest option for chat and script writing.",
-              _engine_files(_GH_LLAMA, [(f"llama-{LLAMA_TAG}-bin-win-cuda-12.4-x64.zip", 319)], "llama-cuda")
-              + [_LLAMA_CUDART],
-              "MIT", backend="cuda"),
-    Component("llama-vulkan", "engine", "llm", "llama.cpp (Vulkan)",
-              "Text engine for AMD / Intel / NVIDIA GPUs via Vulkan. Small download.",
-              _engine_files(_GH_LLAMA, [(f"llama-{LLAMA_TAG}-bin-win-vulkan-x64.zip", 38)], "llama-vulkan"),
-              "MIT", backend="vulkan"),
-    Component("llama-cpu", "engine", "llm", "llama.cpp (CPU)",
-              "Text engine that runs on any PC without a GPU.",
-              _engine_files(_GH_LLAMA, [(f"llama-{LLAMA_TAG}-bin-win-cpu-x64.zip", 25)], "llama-cpu"),
-              "MIT", backend="cpu"),
-    Component("sd-cuda", "engine", "image", "stable-diffusion.cpp (NVIDIA CUDA)",
-              "Image engine for NVIDIA GPUs.",
-              _engine_files(_GH_SD, [(f"sd-master-{SD_HASH}-bin-win-cuda12-x64.zip", 412),
-                                     ("cudart-sd-bin-win-cu12-x64.zip", 563)], "sd-cuda"),
-              "MIT", backend="cuda"),
-    Component("sd-vulkan", "engine", "image", "stable-diffusion.cpp (Vulkan)",
-              "Image engine for AMD / Intel / NVIDIA GPUs via Vulkan.",
-              _engine_files(_GH_SD, [(f"sd-master-{SD_HASH}-bin-win-vulkan-x64.zip", 30)], "sd-vulkan"),
-              "MIT", backend="vulkan"),
-    Component("sd-cpu", "engine", "image", "stable-diffusion.cpp (CPU)",
-              "Image engine for PCs without a GPU (slow: minutes per image).",
-              _engine_files(_GH_SD, [(f"sd-master-{SD_HASH}-bin-win-cpu-x64.zip", 18)], "sd-cpu"),
-              "MIT", backend="cpu"),
-    Component("whisper-cpu", "engine", "stt", "whisper.cpp (CPU)",
-              "Speech-to-text engine. Runs on the processor of any PC, so it never competes with image or "
-              "video jobs for the graphics card.",
-              _engine_files(_GH_WHISPER, [("whisper-bin-x64.zip", 9)], "whisper-cpu"),
-              "MIT"),
-    Component("whisper-cuda", "engine", "stt", "whisper.cpp (NVIDIA CUDA)",
-              "Speech-to-text on the graphics card: about 20x faster than the CPU engine. Shares the CUDA "
-              "libraries of the text engine, so only the speech parts are downloaded.",
-              [FileSpec(_GH_WHISPER + "whisper-bin-win-cuda-12.4.0-x64.zip", "bin/_dl/whisper-cuda.zip", 258,
-                        extract_to="bin/whisper-cuda",
-                        members=("whisper-cli.exe", "whisper.dll", "ggml.dll", "ggml-base.dll", "ggml-cuda.dll",
-                                 "ggml-cpu-*")),
-               _LLAMA_CUDART],
-              "MIT", backend="cuda"),
-    Component("ffmpeg", "engine", "tool", "FFmpeg",
-              "Video encoder used to assemble the final video. Skipped if already on your PATH.",
-              [FileSpec(_FFMPEG, "bin/_dl/ffmpeg.zip", 200, extract_to="bin/ffmpeg")],
-              "GPL"),
+    # ---------------- engines (builds for this system) ----------------
+    *_engines(),
     # ================= models =================
     # ---- text (write scripts, chat) ----
     *[_llm(*a) for a in [
@@ -529,8 +590,10 @@ def fit_label(c: Component, hw: dict) -> tuple[str, str]:
     if c.soon:
         return "soon", "Coming in a future update."
     if c.kind == "engine":
-        if c.backend and c.backend != hw.get("backend"):
+        if c.backend and c.id != engine_for(c.category, hw.get("backend", "cpu")):
             return "other-backend", "Made for different hardware than this PC uses."
+        if c.backend and c.backend != hw.get("backend"):     # e.g. Vulkan pictures on a Linux NVIDIA PC
+            return "recommended", "The best engine of this kind for this PC on this system."
         return "recommended", "Matches this PC."
     if c.category == "tts":
         return "great", "Runs on the processor (CPU) and is fast."
@@ -567,7 +630,7 @@ def fit_label(c: Component, hw: dict) -> tuple[str, str]:
             secs = rtf * 600
             return "under a minute" if secs < 60 else f"about {secs / 60:.0f} min"
         cpu = took(stt_rtf(c, hw, False))
-        if hw.get("backend") == "cuda":
+        if hw.get("backend") == "cuda" and "whisper-cuda" in BY_ID:
             return "great", (f"{took(stt_rtf(c, hw, True)).capitalize()} for 10 minutes of speech with the NVIDIA "
                              f"engine ({cpu} on the processor).")
         level = "great" if stt_rtf(c, hw, False) <= 0.5 else "slow"
@@ -599,9 +662,25 @@ def fit_label(c: Component, hw: dict) -> tuple[str, str]:
     return "too-big", f"Needs about {_gb(need_ram)} of RAM; this PC has {_gb(ram_mb)}."
 
 
+_ENGINE_PREFIX = {"llm": "llama", "image": "sd", "stt": "whisper"}
+
+
+def engine_for(category: str, backend: str) -> str | None:
+    """The engine to use for this kind of work: the PC's backend if this system has a build for it, else the
+    next best one (Linux has no CUDA build of stable-diffusion.cpp, so NVIDIA PCs use Vulkan there)."""
+    prefix = _ENGINE_PREFIX.get(category)
+    if not prefix:
+        return None
+    order = {"cuda": ("cuda", "vulkan", "cpu"), "vulkan": ("vulkan", "cpu")}.get(backend, ("cpu",))
+    if category == "stt":
+        order = ("cuda", "cpu") if backend == "cuda" else ("cpu",)   # whisper has no Vulkan engine here
+    return next((f"{prefix}-{b}" for b in order if f"{prefix}-{b}" in BY_ID), None)
+
+
 def recommended_set(hw: dict) -> list[str]:
     backend = hw["backend"]
-    ids = [f"llama-{backend}", f"sd-{backend}", "tts-kokoro", "img-dreamshaper8"]
+    ids = [engine_for("llm", backend), engine_for("image", backend), "tts-kokoro", "img-dreamshaper8"]
+    ids = [i for i in ids if i]
     vram = hw.get("vram_mb", 0) if backend != "cpu" else 0
     if vram >= 3500 or hw.get("ram_gb", 0) >= 16:
         ids.append("llm-qwen3-4b")
@@ -612,12 +691,17 @@ def recommended_set(hw: dict) -> list[str]:
     return ids
 
 
+def exe_name(name: str) -> str:
+    """'llama-server' -> 'llama-server.exe' on Windows, unchanged on Linux."""
+    return name + config.EXE
+
+
 def find_exe(folder: str, names: tuple[str, ...]) -> Path | None:
     root = config.BIN / folder
     if not root.exists():
         return None
     for name in names:
-        hits = sorted(root.rglob(name), key=lambda p: len(p.parts))
+        hits = sorted((p for p in root.rglob(name) if p.is_file()), key=lambda p: len(p.parts))
         if hits:
             return hits[0]
     return None
@@ -627,12 +711,12 @@ def engine_exe(category: str, backend: str) -> tuple[Path, str]:
     """Find an installed engine executable, preferring the chosen backend."""
     if category == "stt":
         for b in ("cuda", "cpu") if backend == "cuda" else ("cpu",):
-            comp = BY_ID[f"whisper-{b}"]
-            exe = find_exe(f"whisper-{b}", ("whisper-cli.exe",)) if comp.is_installed() else None
+            comp = BY_ID.get(f"whisper-{b}")
+            exe = find_exe(f"whisper-{b}", (exe_name("whisper-cli"),)) if comp and comp.is_installed() else None
             if exe:
                 return exe, b
         raise RuntimeError("Speech-to-text engine not installed. Open Models → Speech to text.")
-    names = {"llm": ("llama-server.exe",), "image": ("sd-cli.exe", "sd.exe")}[category]
+    names = {"llm": (exe_name("llama-server"),), "image": (exe_name("sd-cli"), exe_name("sd"))}[category]
     prefix = {"llm": "llama", "image": "sd"}[category]
     order = [backend] + [b for b in ("cuda", "vulkan", "cpu") if b != backend]
     for b in order:
@@ -648,7 +732,7 @@ def ffmpeg_exe() -> str:
     sys_ff = shutil.which("ffmpeg")
     if sys_ff:
         return sys_ff
-    exe = find_exe("ffmpeg", ("ffmpeg.exe",))
+    exe = find_exe("ffmpeg", (exe_name("ffmpeg"),))
     if not exe:
         raise RuntimeError("FFmpeg not installed. Open Models and install FFmpeg.")
     return str(exe)

@@ -360,9 +360,9 @@ def transcribe_options() -> dict:
             "models": [{"id": c.id, "name": c.name, "translates": c.id != "stt-whisper-turbo",
                         "rtf": catalog.stt_rtf(c, hw, gpu)} for c in catalog.installed("stt")],
             "active": _active(stt), "languages": STT_LANGUAGES,
-            "setup": [c.id for c in (catalog.get("whisper-cuda" if hw["backend"] == "cuda" else "whisper-cpu"),
+            "setup": [c.id for c in (catalog.get(catalog.engine_for("stt", hw["backend"]) or "whisper-cpu"),
                                      catalog.get("stt-whisper-turbo")) if not c.is_installed()],
-            "gpu": gpu, "gpu_engine_available": hw["backend"] == "cuda" and not gpu}
+            "gpu": gpu, "gpu_engine_available": hw["backend"] == "cuda" and "whisper-cuda" in catalog.BY_ID and not gpu}
 
 
 @app.post("/api/creations/media")
@@ -426,8 +426,7 @@ async def upload_picture(request: Request) -> dict:
 def reveal_creations(kind: str) -> dict:
     if kind not in tools.EXT:
         raise HTTPException(404, "Unknown kind")
-    folder = tools._dir(kind)
-    subprocess.Popen(["explorer", str(folder)])
+    _open_folder(tools._dir(kind))
     return {"ok": True}
 
 
@@ -609,9 +608,18 @@ def reveal_project(pid: str) -> dict:
     target = (config.OUTPUTS / pid).resolve()
     if target.parent != config.OUTPUTS.resolve() or not target.is_dir():
         raise HTTPException(404, "Unknown project")
-    if os.name == "nt":
-        subprocess.Popen(["explorer", str(target)])
+    _open_folder(target)
     return {"ok": True}
+
+
+def _open_folder(folder: Path) -> None:
+    """Show a folder in the system's file manager (Explorer on Windows, the desktop's default on Linux)."""
+    if os.name == "nt":
+        subprocess.Popen(["explorer", str(folder)])
+    elif shutil.which("xdg-open"):
+        subprocess.Popen(["xdg-open", str(folder)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        raise HTTPException(501, f"No file manager found. The folder is {folder}")
 
 
 # ---------------------------------------------------------------- static files

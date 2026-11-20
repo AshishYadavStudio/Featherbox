@@ -90,6 +90,38 @@ it opens `http://127.0.0.1:8420` in your browser.
 Developer requirements: Windows 10/11, Python 3.11+, Node 18+ (only to build the UI), and an FFmpeg on
 PATH, or install it from the Models page.
 
+## Linux
+
+Featherbox runs on Linux from source (x86-64; there is no installer or tray app yet). It is tested on
+Ubuntu 24.04 LTS, and the engine builds it downloads run on Ubuntu 24.04 and newer, or any distro of the
+same age (glibc 2.39+).
+
+```bash
+sudo apt install python3 python3-venv nodejs npm ffmpeg fonts-noto-core
+# graphics cards through Vulkan (AMD, Intel, and NVIDIA for pictures and video):
+sudo apt install mesa-vulkan-drivers libvulkan1
+git clone https://github.com/AshishYadavStudio/Featherbox.git
+cd Featherbox && ./start.sh
+```
+
+`start.sh` sets up Python and builds the interface on the first run, then opens
+`http://127.0.0.1:8420` in your browser. Run it again to start Featherbox later; update with `git pull`.
+
+What is different from Windows:
+
+| | Windows | Linux |
+|---|---|---|
+| Text (llama.cpp) | CUDA, Vulkan or CPU | CUDA (NVIDIA driver 570+, CUDA 12.8), Vulkan or CPU |
+| Pictures and video (stable-diffusion.cpp) | CUDA, Vulkan or CPU | Vulkan or CPU: there is no Linux CUDA build, so NVIDIA cards use Vulkan |
+| Transcribe (whisper.cpp) | CUDA or CPU | CPU (there is no Linux CUDA build) |
+| Updates | One click | `git pull` |
+
+The engines are the official Linux builds of the same versions as on Windows, except stable-diffusion.cpp,
+which uses the 2 November 2026 build: newer Linux builds are made on Ubuntu 26.04 and don't start on
+24.04 LTS. That build supports every model in the catalog. Built-in AMD and Intel graphics are detected
+from the kernel's device files (with `lspci` for the product name when it is installed). Hindi captions
+use Noto Sans Devanagari (`fonts-noto-core`) or any other installed Devanagari font.
+
 ## How it works
 
 ```
@@ -294,6 +326,7 @@ Check each license before selling the app or using generated content commerciall
 - [ ] More recipes: lecture → notes + quiz, product photo → ad, podcast → clips
 - [x] One-click Windows installer (no admin, bundled Python, tray launcher, uninstaller)
 - [ ] Code-sign the installer (removes the SmartScreen warning)
+- [x] Linux (from source; tested on Ubuntu 24.04)
 - [ ] Mac version
 - [x] Bigger model library with "will it run here?" advice, model choice and your own Hugging Face links
 - [x] AI motion with Wan video models (whole video, first scene, or single scenes)

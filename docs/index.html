@@ -460,6 +460,11 @@ footer a { color: var(--muted); }
         <p>Yes. AMD and Intel graphics use the Vulkan engines, and PCs without a graphics card run everything on the processor.
           Voice and speech-to-text are quick on any PC; pictures and especially video are much slower without a GPU.
           Featherbox has mostly been tested on NVIDIA so far, so reports from other PCs are very welcome.</p></details>
+      <details><summary>Does it work on Linux or Mac?</summary>
+        <p><b>Linux:</b> yes, from source on 64-bit PCs (tested on Ubuntu 24.04). Clone the
+          <a href="https://github.com/AshishYadavStudio/Featherbox#linux">GitHub repository</a> and run <code>./start.sh</code>;
+          the README lists the few packages to install first. NVIDIA cards use CUDA for text and Vulkan for pictures and video.
+          <b>Mac:</b> not yet; it's on the roadmap.</p></details>
       <details><summary>Where are my models and creations stored?</summary>
         <p>Everything lives in the install folder: the program in <code>app\</code> and <code>python\</code>, and models, videos and settings
           in <code>data\</code>. Updating keeps <code>data\</code>; uninstalling asks whether to keep it.</p></details>

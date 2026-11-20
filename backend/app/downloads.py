@@ -20,6 +20,36 @@ class _Cancelled(Exception):
     pass
 
 
+def extract(archive: Path, out: Path) -> None:
+    """Unpack an engine download: .zip (Windows builds, stable-diffusion.cpp on Linux) or .tar.gz / .tar.xz
+    (llama.cpp, whisper.cpp and FFmpeg on Linux). On Linux, programs must stay runnable after unpacking."""
+    if archive.name.endswith(".zip"):
+        with zipfile.ZipFile(archive) as zf:
+            zf.extractall(out)
+            if config.PLATFORM != "windows":
+                for info in zf.infolist():          # zipfile drops the Unix permission bits; put them back
+                    mode = info.external_attr >> 16
+                    target = out / info.filename
+                    if mode and target.is_file():
+                        target.chmod(mode & 0o777 | 0o600)
+    else:
+        import tarfile
+        with tarfile.open(archive) as tf:
+            try:
+                tf.extractall(out, filter="data")   # refuses absolute paths and links out of the folder
+            except TypeError:                       # Python without extraction filters
+                root = out.resolve()
+                for m in tf.getmembers():
+                    if not (root / m.name).resolve().is_relative_to(root):
+                        raise RuntimeError(f"Unsafe path in {archive.name}: {m.name}")
+                tf.extractall(out)
+    if config.PLATFORM != "windows":
+        for p in out.rglob("*"):
+            # engines inside a zip made without Unix permissions: mark programs and libraries runnable
+            if p.is_file() and not p.is_symlink() and (p.suffix == "" or ".so" in p.name):
+                p.chmod(p.stat().st_mode | 0o755)
+
+
 class DownloadManager:
     def __init__(self) -> None:
         self.tasks: dict[str, dict] = {}
@@ -91,8 +121,7 @@ class DownloadManager:
                     t["status"] = "extracting"
                     out = config.DATA / f.extract_to
                     out.mkdir(parents=True, exist_ok=True)
-                    with zipfile.ZipFile(dest) as zf:
-                        zf.extractall(out)
+                    extract(dest, out)
                     dest.unlink(missing_ok=True)
                     t["status"] = "downloading"
             comp.marker.parent.mkdir(parents=True, exist_ok=True)

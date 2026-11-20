@@ -67,7 +67,9 @@ def status() -> dict:
     busy = _busy_reason()
     reason = None
     if not root:
-        reason = "This copy runs from source, so it can't update itself. Download the installer instead."
+        reason = ("This copy runs from source, so it can't update itself. Download the installer instead."
+                  if config.PLATFORM == "windows" else
+                  "This copy runs from source: update it with git pull, then start it again with ./start.sh.")
     elif busy:
         reason = busy
     elif latest and not latest.get("download_url"):

@@ -18,16 +18,51 @@ from PIL import Image, ImageChops, ImageFilter
 _FONTS = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
 _DEVANAGARI = re.compile(r"[\u0900-\u097F]")
 
+# Linux: the usual packaged fonts (Ubuntu/Debian: fonts-noto-core; Fedora: google-noto-sans-* fonts)
+_LINUX = [Path("/usr/share/fonts/truetype"), Path("/usr/share/fonts/opentype"), Path("/usr/share/fonts")]
+
 # (path, face index) candidates, first existing wins
-_LATIN_FONTS = [(_FONTS / "seguibl.ttf", 0), (_FONTS / "ariblk.ttf", 0), (_FONTS / "arialbd.ttf", 0)]
-_INDIC_FONTS = [(_FONTS / "Nirmala.ttc", 1), (_FONTS / "Nirmala.ttf", 0), (_FONTS / "NirmalaB.ttf", 0)]
+_LATIN_FONTS = [(_FONTS / "seguibl.ttf", 0), (_FONTS / "ariblk.ttf", 0), (_FONTS / "arialbd.ttf", 0),
+                *[(d / f, 0) for d in _LINUX for f in ("noto/NotoSans-Black.ttf", "noto/NotoSans-Bold.ttf",
+                                                       "google-noto/NotoSans-Bold.ttf", "dejavu/DejaVuSans-Bold.ttf",
+                                                       "liberation/LiberationSans-Bold.ttf")]]
+_INDIC_FONTS = [(_FONTS / "Nirmala.ttc", 1), (_FONTS / "Nirmala.ttf", 0), (_FONTS / "NirmalaB.ttf", 0),
+                *[(d / f, 0) for d in _LINUX for f in ("noto/NotoSansDevanagari-Bold.ttf",
+                                                       "google-noto/NotoSansDevanagari-Bold.ttf",
+                                                       "lohit-devanagari/Lohit-Devanagari.ttf",
+                                                       "fonts-lohit-deva/Lohit-Devanagari.ttf")]]
+
+
+def _fc_match(indic: bool) -> tuple[str, int] | None:
+    """Ask fontconfig (Linux) for any installed bold font that covers the script."""
+    import shutil
+    import subprocess
+    if not shutil.which("fc-match"):
+        return None
+    pattern = "sans:bold:lang=hi" if indic else "sans:bold"
+    try:
+        out = subprocess.run(["fc-match", "-f", "%{file}|%{index}|%{lang}", pattern], capture_output=True,
+                             text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    path, _, rest = out.partition("|")
+    index, _, langs = rest.partition("|")
+    if not path or not Path(path).exists() or (indic and "hi" not in langs.split("|")):
+        return None
+    return path, int(index or 0)
 
 
 def _pick(cands: list[tuple[Path, int]]) -> tuple[str, int]:
     for p, i in cands:
         if p.exists():
             return str(p), i
-    raise RuntimeError("No usable caption font found in " + str(_FONTS))
+    found = _fc_match(cands is _INDIC_FONTS)
+    if found:
+        return found
+    hint = ("" if os.name == "nt" else
+            " On Ubuntu/Debian install them with: sudo apt install fonts-noto-core")
+    raise RuntimeError(("No Hindi (Devanagari) caption font found." if cands is _INDIC_FONTS
+                        else "No caption font found.") + hint)
 
 
 class ShapedFont:

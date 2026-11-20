@@ -7,6 +7,7 @@ import platform
 import re
 import shutil
 import subprocess
+import sys
 
 import psutil
 
@@ -28,6 +29,13 @@ def _cpu_name() -> str:
             key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
                                  r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
             return winreg.QueryValueEx(key, "ProcessorNameString")[0].strip()
+        except OSError:
+            pass
+    else:
+        try:   # Linux: platform.processor() is usually empty
+            for line in open("/proc/cpuinfo", encoding="utf-8", errors="replace"):
+                if line.startswith("model name"):
+                    return line.split(":", 1)[1].strip()
         except OSError:
             pass
     return platform.processor() or "Unknown CPU"
@@ -107,9 +115,58 @@ def _is_integrated(vendor: str, name: str) -> bool:
     return False
 
 
+_PCI_VENDORS = {"0x1002": "amd", "0x8086": "intel", "0x10de": "nvidia"}
+
+
+def _linux_gpus(drm: str = "/sys/class/drm") -> list[dict]:
+    """AMD / Intel adapters on Linux, from the kernel's device files (no extra tools needed). The name comes
+    from lspci when it is installed (e.g. 'Strix [Radeon 880M / 890M]'); AMD's driver also reports how much
+    memory the adapter has to itself, which for built-in graphics is the part of RAM set aside at boot."""
+    from pathlib import Path
+    gpus, seen = [], set()
+    for card in sorted(Path(drm).glob("card[0-9]*")):
+        if "-" in card.name:                   # card0-HDMI-A-1 and similar are outputs, not adapters
+            continue
+        dev = card / "device"
+        try:
+            vendor = _PCI_VENDORS.get((dev / "vendor").read_text().strip(), "other")
+            m = re.search(r"^PCI_SLOT_NAME=(\S+)", (dev / "uevent").read_text(), re.M)
+            slot = m.group(1) if m else dev.resolve().name     # PCI address, e.g. 0000:c4:00.0
+        except OSError:
+            continue
+        if vendor == "nvidia" or slot in seen:
+            continue
+        seen.add(slot)
+        name = ""
+        if shutil.which("lspci"):
+            m = re.search(r'"[^"]*"\s+"[^"]*"\s+"([^"]+)"', _run(["lspci", "-mm", "-s", slot]))
+            name = m.group(1) if m else ""
+            # "Strix [Radeon 880M / 890M]": the part in brackets is the product name people know
+            name = (re.search(r"\[([^\]]+)\]", name) or re.search(r"(.*)", name)).group(1).strip()
+        if not name:
+            name = {"amd": "AMD Radeon graphics", "intel": "Intel graphics"}.get(vendor, "Graphics adapter")
+        elif vendor == "amd" and "amd" not in name.lower():
+            name = f"AMD {name}"
+        elif vendor == "intel" and "intel" not in name.lower():
+            name = f"Intel {name}"
+        try:
+            own_mb = int((dev / "mem_info_vram_total").read_text().strip()) // (1024 * 1024)
+        except (OSError, ValueError):
+            own_mb = 0
+        gpu = {"vendor": vendor, "name": name, "integrated": _is_integrated(vendor, name)}
+        if gpu["integrated"]:
+            gpu["reserved_mb"] = own_mb
+        elif own_mb >= 1024:
+            gpu["vram_mb"] = own_mb
+        gpus.append(gpu)
+    return gpus
+
+
 @functools.lru_cache(maxsize=1)
 def _other_gpus() -> list[dict]:
     """Non-NVIDIA adapters (AMD / Intel) — candidates for the Vulkan backend."""
+    if sys.platform.startswith("linux"):
+        return _linux_gpus()
     if os.name != "nt":
         return []
     out = _run(["powershell", "-NoProfile", "-Command",
@@ -166,7 +223,7 @@ def detect() -> dict:
         shared = int(info["ram_gb"] * 1024 / 2)
         info["igpu"] = {"name": igpu["name"], "memory_mb": igpu.get("reserved_mb", 0) + shared,
                         "shared_mb": shared}
-    if nv and cuda and cuda >= 12.4:
+    if nv and cuda and cuda >= config.CUDA_MIN:
         auto = "cuda"
     elif nv or info["gpus"]:
         auto = "vulkan"
