@@ -23,6 +23,7 @@ class _Cancelled(Exception):
 class DownloadManager:
     def __init__(self) -> None:
         self.tasks: dict[str, dict] = {}
+        self._threads: dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
 
     def status(self, cid: str) -> dict | None:
@@ -32,16 +33,65 @@ class DownloadManager:
         with self._lock:
             t = self.tasks.get(comp.id)
             if t and t["status"] in ("queued", "downloading", "extracting"):
+                t["cancel"] = False          # resumed while it was still pausing: just keep going
                 return t
             t = {"id": comp.id, "status": "queued", "done": 0, "total": comp.size_mb * 1024 * 1024,
                  "speed": 0.0, "file": "", "error": None, "cancel": False}
             self.tasks[comp.id] = t
-        threading.Thread(target=self._run, args=(comp, t), daemon=True).start()
+            th = threading.Thread(target=self._run, args=(comp, t), daemon=True)
+            self._threads[comp.id] = th
+        th.start()
         return t
 
     def cancel(self, cid: str) -> None:
+        """Pause: stop the download but keep what was fetched, so Install resumes from there."""
         if cid in self.tasks:
             self.tasks[cid]["cancel"] = True
+
+    def discard(self, comp: Component, wait_s: float = 20.0) -> int:
+        """Cancel for good: stop the download and delete its partial and unfinished files. Returns bytes freed.
+
+        Only files of a component that is not installed are touched, and never a file or folder that another
+        installed component also uses (e.g. a shared CUDA runtime or text encoder).
+        """
+        from .catalog import components
+        if comp.is_installed():
+            raise ValueError(f"{comp.name} is already installed; use Remove instead.")
+        self.cancel(comp.id)
+        th = self._threads.get(comp.id)
+        if th and th.is_alive():
+            th.join(wait_s)                  # unpacking finishes its current archive before it stops
+            if th.is_alive():
+                raise TimeoutError(f"{comp.name} is still unpacking. Try again in a few seconds.")
+        keep_files, keep_dirs = set(), set()
+        for c in components():
+            if c.id != comp.id and c.is_installed():
+                keep_files |= {f.dest for f in c.files}
+                keep_dirs |= {f.extract_to for f in c.files if f.extract_to}
+        freed = 0
+
+        def drop(p: Path) -> None:
+            nonlocal freed
+            if p.is_dir():
+                freed += sum(x.stat().st_size for x in p.rglob("*") if x.is_file())
+                shutil.rmtree(p, ignore_errors=True)
+            elif p.exists():
+                freed += p.stat().st_size
+                p.unlink(missing_ok=True)
+
+        for f in comp.files:
+            dest = config.DATA / f.dest
+            drop(dest.with_name(dest.name + ".part"))                     # a half-fetched file
+            if f.dest not in keep_files:
+                drop(dest)                                                 # fetched, but the install never finished
+            if f.extract_to and f.extract_to not in keep_dirs:
+                out = config.DATA / f.extract_to
+                drop(out.with_name(out.name + ".part"))                    # a half-fetched zip member set
+                drop(out)                                                  # a half-unpacked engine
+        with self._lock:
+            self.tasks.pop(comp.id, None)
+            self._threads.pop(comp.id, None)
+        return freed
 
     def uninstall(self, comp: Component) -> None:
         from .catalog import shared_paths_in_use

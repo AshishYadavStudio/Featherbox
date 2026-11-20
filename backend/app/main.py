@@ -132,7 +132,11 @@ def _component(c: catalog.Component, hw: dict) -> dict:
 
 def _task(cid: str) -> dict | None:
     t = downloads.status(cid)
-    return {k: v for k, v in t.items() if k != "cancel"} if t else None
+    if not t:
+        return None
+    out = {k: v for k, v in t.items() if k != "cancel"}
+    out["stopping"] = bool(t["cancel"]) and t["status"] in ("queued", "downloading", "extracting")   # pausing
+    return out
 
 
 def _active(engine) -> str | None:
@@ -205,8 +209,25 @@ def add_custom_model(m: CustomModel) -> dict:
 
 @app.post("/api/catalog/{cid}/cancel")
 def cancel_install(cid: str) -> dict:
+    """Pause a download; Install resumes it from where it stopped."""
     downloads.cancel(cid)
     return {"ok": True}
+
+
+@app.post("/api/catalog/{cid}/discard")
+def discard_install(cid: str) -> dict:
+    """Cancel a download for good and delete what it had fetched so far."""
+    try:
+        comp = catalog.get(cid)
+    except KeyError:
+        raise HTTPException(404, "Unknown component")
+    try:
+        freed = downloads.discard(comp)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except TimeoutError as e:
+        raise HTTPException(409, str(e))
+    return {"ok": True, "freed_mb": round(freed / 1048576)}
 
 
 @app.delete("/api/catalog/{cid}")

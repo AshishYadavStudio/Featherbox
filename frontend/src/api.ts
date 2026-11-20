@@ -17,6 +17,7 @@ export type SystemInfo = {
 export type DownloadTask = {
   id: string; status: "queued" | "downloading" | "extracting" | "done" | "error" | "cancelled";
   done: number; total: number; speed: number; file: string; error: string | null;
+  stopping?: boolean;   // paused, but still finishing the current step (e.g. unpacking)
 };
 
 export type Component = {

@@ -464,3 +464,17 @@ details.adv[open] summary::before { transform: rotate(90deg); }
 .launch { position: fixed; inset: 0; z-index: 1000; background: #ff5a52; transition: opacity .32s ease; cursor: pointer; }
 .launch svg { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
 .launch.fading { opacity: 0; pointer-events: none; }
+
+/* ---------------- download controls ---------------- */
+.setup-items li { grid-template-columns: 18px minmax(120px, 1.2fr) minmax(80px, 2fr) minmax(0, 1.6fr) 28px; }
+.setup-item-act { display: flex; justify-content: flex-end; }
+.setup-item-act .icon-btn { width: 26px; height: 26px; }
+.setup-cancel { align-self: flex-start; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; }
+.link.danger { color: var(--bad); }
+.link:disabled { opacity: .6; cursor: default; }
+.bar.paused > div { background: var(--muted); }
+@media (max-width: 900px) {
+  .setup-items li { grid-template-columns: 18px 1fr 28px; }
+  .setup-items li .bar, .setup-items li .setup-item-state { grid-column: 2; }
+  .setup-item-act { grid-column: 3; grid-row: 1; }
+}
