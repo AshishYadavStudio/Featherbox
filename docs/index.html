@@ -306,7 +306,7 @@ footer a { color: var(--muted); }
         <div class="copy">
           <h3>Image: describe it, your PC paints it</h3>
           <ul>
-            <li>Z-Image Turbo, FLUX, SDXL and SD 1.5 models, or your own from Hugging Face.</li>
+            <li>Z-Image Turbo, the new FLUX.3 Klein and Qwen-Image 2.1, SDXL and SD 1.5 models, or your own from Hugging Face.</li>
             <li>Portrait, square or landscape; styles from cinematic to watercolor; up to 4 at once.</li>
             <li>Send any picture to Video to bring it to life.</li>
           </ul>
@@ -319,6 +319,7 @@ footer a { color: var(--muted); }
           <h3>Video: short AI clips from text or a picture</h3>
           <ul>
             <li>Wan 2.2 (5B) animates your picture so the look stays the same; Wan 2.1 works from text.</li>
+            <li>New: Wan 2.2 5B Turbo needs only 4 steps instead of 20, for much quicker clips.</li>
             <li>Smart memory tricks (offloading, tiling and a tiny fast decoder) make video fit in 4 GB.</li>
             <li>Choose Fast or Best quality.</li>
           </ul>
@@ -354,7 +355,7 @@ footer a { color: var(--muted); }
         <div class="copy">
           <h3>Models: honest advice for your PC</h3>
           <ul>
-            <li>30+ curated text, image, video, voice and speech-to-text models.</li>
+            <li>35+ curated text, image, video, voice and speech-to-text models, including 2026 releases such as Gemma 4 and Qwen3.5.</li>
             <li>Each one says whether it will run well on <em>your</em> hardware, but nothing is blocked.</li>
             <li>One-click setup picks the right engines (NVIDIA CUDA, Vulkan or CPU) and models.</li>
             <li>Add your own models from a Hugging Face link.</li>
@@ -429,10 +430,10 @@ footer a { color: var(--muted); }
       <div class="grid3">
         <div class="card"><h3><span class="icon"><svg><use href="#i-chat"/></svg></span>Text</h3>
           <p>llama.cpp runs Qwen, Llama, Gemma, Mistral and Sarvam models for scripts and chat.</p>
-          <div class="chips"><span class="chip">Qwen3 4B</span><span class="chip">Gemma 3</span><span class="chip">Llama 3</span><span class="chip">Sarvam-M</span></div></div>
+          <div class="chips"><span class="chip">Qwen3.5</span><span class="chip">Gemma 4</span><span class="chip">Qwen3 4B</span><span class="chip">Llama 3</span><span class="chip">Sarvam-M</span></div></div>
         <div class="card"><h3><span class="icon"><svg><use href="#i-image"/></svg></span>Image &amp; video</h3>
           <p>stable-diffusion.cpp runs picture and video models with CPU offloading and tiling.</p>
-          <div class="chips"><span class="chip">Z-Image Turbo</span><span class="chip">FLUX.1</span><span class="chip">SDXL</span><span class="chip">Wan 2.2</span></div></div>
+          <div class="chips"><span class="chip">Z-Image Turbo</span><span class="chip">FLUX.3 Klein</span><span class="chip">Qwen-Image 2.1</span><span class="chip">SDXL</span><span class="chip">Wan 2.2</span></div></div>
         <div class="card"><h3><span class="icon"><svg><use href="#i-voice"/></svg></span>Voice &amp; speech</h3>
           <p>Kokoro speaks, whisper.cpp listens. Both run fine on the processor alone.</p>
           <div class="chips"><span class="chip">Kokoro TTS</span><span class="chip">Whisper Turbo</span><span class="chip">Silero VAD</span></div></div>
@@ -466,8 +467,10 @@ footer a { color: var(--muted); }
         <p>Scripts, voices and captions in English and Hindi. Transcription understands 99 languages, including Bengali, Marathi, Tamil, Telugu,
           Gujarati, Kannada, Malayalam, Punjabi and Urdu.</p></details>
       <details><summary>Can I use what I make commercially?</summary>
-        <p>That depends on the model you used. Most (Qwen, Z-Image, FLUX schnell, Wan, Kokoro, Whisper) are Apache-2.0 or MIT, but some,
-          such as the Llama and Gemma models and the SD 1.5 / SDXL checkpoints, have their own terms. Each model's license is shown on the Models page.</p></details>
+        <p>That depends on the model you used. Most (Qwen text models, Gemma 4, Z-Image, FLUX.1 schnell, Wan, Kokoro, Whisper) are Apache-2.0
+          or MIT, but some have their own terms: the Llama and Gemma 3 models and the SD 1.5 / SDXL checkpoints. Two image models are
+          restricted: <b>Qwen-Image 2.1 Turbo</b> is for research only (not commercial use), and <b>FLUX.3 Image Klein</b> uses the
+          FLUX Kommunity License, so check it before selling what you make. Each model's license is shown on the Models page.</p></details>
       <details><summary>Is Featherbox open source?</summary>
         <p>Yes. Featherbox is free and open source under the MIT License; the code is on
           <a href="https://github.com/AshishYadavStudio/Featherbox">GitHub</a>. The AI engines and models it downloads keep their own licenses.</p></details>
