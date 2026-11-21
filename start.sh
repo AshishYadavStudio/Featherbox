@@ -13,10 +13,16 @@ if [ ! -x backend/.venv/bin/python ]; then
   echo "[Featherbox] First run: creating the Python environment..."
   "$PY" -m venv backend/.venv
   backend/.venv/bin/python -m pip install --upgrade pip
+fi
+# install the packages on the first run, and again after `git pull` changed requirements.txt
+STAMP=backend/.venv/.requirements-installed
+if [ ! -f "$STAMP" ] || [ backend/requirements.txt -nt "$STAMP" ]; then
   backend/.venv/bin/python -m pip install -r backend/requirements.txt
+  touch "$STAMP"
 fi
 
-if [ ! -f frontend/dist/index.html ]; then
+# build the interface on the first run, and again after `git pull` brought newer interface code
+if [ ! -f frontend/dist/index.html ] || [ -n "$(find frontend/src frontend/index.html frontend/package.json -newer frontend/dist/index.html -print -quit 2>/dev/null)" ]; then
   echo "[Featherbox] Building the interface..."
   (cd frontend && npm install && npm run build)
 fi
