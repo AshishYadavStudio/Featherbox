@@ -17,6 +17,7 @@ export type SystemInfo = {
 export type DownloadTask = {
   id: string; status: "queued" | "downloading" | "extracting" | "done" | "error" | "cancelled";
   done: number; total: number; speed: number; file: string; error: string | null;
+  stopping?: boolean;   // paused, but still finishing the current step (e.g. unpacking)
 };
 
 export type Component = {
@@ -24,6 +25,7 @@ export type Component = {
   name: string; description: string; size_mb: number; download_mb: number; license: string; backend: string | null;
   installed: boolean; fit: string; reason: string; tags: string[]; studio: boolean; soon: boolean;
   custom: boolean; url: string | null; download: DownloadTask | null;
+  i2v?: boolean;   // video models: can animate a picture (image-to-video)
 };
 export type Catalog = {
   components: Component[]; recommended: string[];
@@ -33,7 +35,33 @@ export type Catalog = {
 export type Job = {
   id: string; kind: string; title: string; status: "queued" | "running" | "done" | "error" | "cancelled";
   progress: number; stage: string; error: string | null; result: any; created: number; ref?: string | null;
+  info?: RenderInfo | Record<string, never>;
 };
+/** Live details of a Studio render: each scene's picture once painted, and time left (null = not known yet). */
+export type RenderInfo = {
+  project: string; scenes: { image: string | null; state: "waiting" | "painting" | "animating" | "done"; moving: boolean }[];
+  eta_s: number | null; eta_at: number; picture_s: number | null;
+};
+/** Typical durations measured on this PC (null = never timed here). */
+export type Estimates = {
+  picture_s: number | null; clip_s: { fast: number | null; best: number | null };
+  edit_still_s: number | null; edit_ai_s: number | null; assemble_s: number | null;
+};
+/** "about 40 s", "about 1½ min", "about 12 min", "about 1 h 5 min" */
+export function fmtAbout(s: number): string {
+  if (s < 60) return `about ${Math.max(5, Math.round(s / 5) * 5)} s`;
+  if (s < 600) { const h = Math.round(s / 30) / 2; return `about ${Math.floor(h)}${h % 1 ? "½" : ""} min`; }
+  const m = Math.round(s / 60);
+  return m < 60 ? `about ${m} min` : `about ${Math.floor(m / 60)} h ${m % 60} min`;
+}
+/** Seconds for a whole render from this PC's timings, or null if any part was never timed (same rule as the backend). */
+export function renderEstimate(e: Estimates | null, scenes: number, clips: number, quality: string): number | null {
+  if (!e || e.picture_s == null || e.assemble_s == null) return null;
+  const clip = quality === "best" ? e.clip_s.best : e.clip_s.fast;
+  if (clips && (clip == null || e.edit_ai_s == null)) return null;
+  if (scenes > clips && e.edit_still_s == null) return null;
+  return scenes * e.picture_s + clips * (clip ?? 0) + clips * (e.edit_ai_s ?? 0) + (scenes - clips) * (e.edit_still_s ?? 0) + e.assemble_s;
+}
 
 export type Scene = { narration: string; image_prompt: string };
 export type Script = {

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import random
 import re
+import statistics
 import threading
 import time
 import unicodedata
@@ -19,7 +20,7 @@ import numpy as np
 
 from PIL import Image, ImageOps
 
-from .. import catalog, config
+from .. import catalog, config, timings
 from ..engines.image import image_engine, video_engine
 from ..engines.llm import llm
 from ..engines.tts import tts
@@ -236,7 +237,29 @@ def _result(pid: str, meta: dict) -> dict:
             "thumb": f"/outputs/{pid}/thumb.jpg?v={v}", "duration": meta.get("duration")}
 
 
+def remaining_time(moving: list[bool], picture_s: float | None, clip_s: float | None,
+                   edit_still_s: float | None, edit_ai_s: float | None, assemble_s: float | None,
+                   painted: int = 0, animated: int = 0, edited: int = 0) -> float | None:
+    """Seconds left in a render, from what this PC took before (timings.py). None if any part has never
+    been timed here: no guessing. `moving[i]` says whether scene i gets an AI clip."""
+    n, clips = len(moving), sum(moving)
+    left_edits = moving[edited:]
+    needed = [picture_s, assemble_s]
+    if clips > animated:
+        needed.append(clip_s)
+    if not all(left_edits):
+        needed.append(edit_still_s)
+    if any(left_edits):
+        needed.append(edit_ai_s)
+    if any(v is None for v in needed):
+        return None
+    t = max(0, n - painted) * picture_s + max(0, clips - animated) * (clip_s or 0)
+    t += sum((edit_ai_s if m else edit_still_s) or 0 for m in left_edits) + assemble_s
+    return round(t)
+
+
 def _assemble(job: Job, d: Path, meta: dict) -> dict:
+    t0 = time.monotonic()
     n = len(meta["scenes"])
     segs = [d / "segments" / f"seg_{i+1:02d}.mp4" for i in range(n)]
     duration = sum(s["duration"] for s in meta["scenes"])
@@ -252,6 +275,7 @@ def _assemble(job: Job, d: Path, meta: dict) -> dict:
     meta.update({"status": "done", "duration": round(duration, 1), "video": "final.mp4", "thumb": "thumb.jpg",
                  "scenes_count": n, "rev": meta.get("rev", 0) + 1, "updated": time.time()})
     _save(d, meta)
+    timings.record("assemble", time.monotonic() - t0)
     return _result(d.name, meta)
 
 
@@ -322,19 +346,49 @@ def render(job: Job, script: dict, voice: str = "af_heart", style: str = "cinema
         return f"Painting scene {i+1} of {n}  ·  voice {tts_done[0]}/{n}"
 
     moving = [i for i, sc in enumerate(meta["scenes"]) if sc["motion"] == "ai"]
+    is_moving = [i in moving for i in range(n)]
     paint_end = 0.4 if moving else 0.8           # AI clips take most of the time when they're on
+
+    # Live details for the progress screen: each scene's picture as soon as it is painted, and time left
+    img_key = f"image:{image_engine.default_model()}"
+    clip_key = f"video:{video_engine.default_model()}:{config.load_settings().get('video_quality', 'fast')}" if moving else ""
+    paint_times: list[float] = []
+    shown = [{"image": None, "state": "waiting", "moving": m} for m in is_moving]
+    job.info = {"project": pid, "scenes": shown, "eta_s": None, "eta_at": time.time(), "picture_s": None}
+
+    def refresh_eta(painted: int, animated: int = 0, edited: int = 0) -> None:
+        # this run's own pace once it has two pictures (cold start skews the first), else this PC's history
+        if len(paint_times) >= 2:
+            pic = statistics.median(paint_times)
+        else:
+            pic = timings.typical(img_key) or (paint_times[0] if paint_times else None)
+        job.info["picture_s"] = round(pic, 1) if pic else None
+        job.info["eta_s"] = remaining_time(is_moving, pic, timings.typical(clip_key) if clip_key else None,
+                                           timings.typical("edit:still"), timings.typical("edit:ai"),
+                                           timings.typical("assemble"), painted, animated, edited)
+        job.info["eta_at"] = time.time()
+
+    refresh_eta(0)
     for i, sc in enumerate(meta["scenes"]):
         job.update(0.05 + (paint_end - 0.05) * i / n, stage(i))
+        shown[i]["state"] = "painting"
+        t0 = time.monotonic()
         _paint(job, d, i, sc["image_prompt"], style, sc["seed"],
                on_progress=lambda p, i=i: job.update(0.05 + (paint_end - 0.05) * (i + p) / n, stage(i)))
+        paint_times.append(time.monotonic() - t0)
+        shown[i].update(state="done", image=f"/outputs/{pid}/scene_{i+1:02d}.png?v=0")
+        refresh_eta(i + 1)
 
     for k, i in enumerate(moving):
         label = f"Animating scene {i+1}  ·  clip {k+1} of {len(moving)}"
         job.update(paint_end + (0.8 - paint_end) * k / len(moving), label)
+        shown[i]["state"] = "animating"
         _animate(job, d, i, meta["scenes"][i], style,
                  on_progress=lambda p, k=k, label=label: job.update(
                      paint_end + (0.8 - paint_end) * (k + p) / len(moving), label))
+        shown[i]["state"] = "done"
         _save(d, meta)
+        refresh_eta(n, k + 1)
 
     job.update(0.8, "Finishing voiceover")
     vt.join()
@@ -344,7 +398,10 @@ def render(job: Job, script: dict, voice: str = "af_heart", style: str = "cinema
 
     for i in range(n):
         job.update(0.82 + 0.12 * i / n, f"Editing scene {i+1} of {n}")
+        t0 = time.monotonic()
         _segment(d, i, meta)
+        timings.record(f"edit:{'ai' if meta['scenes'][i].get('motion') == 'ai' else 'still'}", time.monotonic() - t0)
+        refresh_eta(n, len(moving), i + 1)
     return _assemble(job, d, meta)
 
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, Download, ExternalLink, Link2, Loader2, Plus, Rocket, Trash2, X } from "lucide-react";
+import { Check, Download, ExternalLink, Link2, Loader2, Pause, Play, Plus, Rocket, Trash2, X } from "lucide-react";
 import { UpdatesCard } from "../components/Updates";
+import { PageLoading } from "../components/ToolKit";
 import { api, fmtMB, fmtSize, post, type Catalog, type Component, type SystemInfo } from "../api";
 
 /** Advice only: every model can still be downloaded. */
@@ -32,6 +33,8 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
   const [onlyGood, setOnlyGood] = useState(false);
   const [showAllEngines, setShowAllEngines] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const load = useCallback(() =>
     api<Catalog>("/api/catalog").then(setCat).catch((e) => setError(e.message)), []);
@@ -43,10 +46,36 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
   useEffect(() => { const t = setInterval(load, active ? 1000 : 5000); return () => clearInterval(t); }, [load, active]);
 
   const missing = items.filter((c) => recommended.includes(c.id) && !c.installed);
-  const missingMB = missing.reduce((n, c) => n + c.download_mb, 0);
+  // what is still left to fetch: a paused download only needs the rest
+  const missingMB = Math.max(0, Math.round(missing.reduce((n, c) => n + (c.download && c.download.total
+    ? (c.download.total - c.download.done) / 1048576 : c.download_mb), 0)));
+  // What one-click setup is (or was) installing: still missing, or downloaded in this session.
+  // Finished items stay in the list so the overall bar doesn't jump backwards as they complete.
+  const setupItems = items.filter((c) => recommended.includes(c.id) && (!c.installed || c.download));
+  const setupBusy = setupItems.some((c) => c.download && BUSY.includes(c.download.status));
+  const setupStarted = setupItems.some((c) => c.download);
   const hw = sys?.hardware;
 
   const act = async (fn: () => Promise<unknown>) => { setError(null); try { await fn(); } catch (e: any) { setError(e.message); } load(); };
+
+  // Pause all: stop every running setup download, keeping what was fetched (Resume continues from there).
+  const pauseAll = () => act(() => Promise.all(setupItems
+    .filter((c) => c.download && BUSY.includes(c.download.status)).map((c) => post(`/api/catalog/${c.id}/cancel`))));
+  // Cancel setup for good: stop and delete the partial downloads of everything not yet installed.
+  const unfinished = setupItems.filter((c) => !c.installed && c.download);
+  const partialBytes = unfinished.reduce((n, c) => n + (c.download?.done ?? 0), 0);
+  async function cancelSetup() {
+    const size = partialBytes > 0 ? ` and delete ${fmtMB(partialBytes)} already downloaded` : "";
+    if (!confirm(`Cancel setup${size}?\n\nThis can't be resumed: you would download it again from the start. ` +
+      `To continue later instead, use Pause all.`)) return;
+    setCancelling(true); setError(null); setNotice(null);
+    let freed = 0;
+    try {
+      for (const c of unfinished) freed += (await post<{ freed_mb: number }>(`/api/catalog/${c.id}/discard`)).freed_mb;
+      setNotice(`Setup cancelled. ${freed ? `Deleted ${fmtSize(freed)} of partial downloads.` : "Nothing was left on disk."}`);
+    } catch (e: any) { setError(e.message); }
+    setCancelling(false); load();
+  }
 
   let list = items.filter((c) => inTab(c, tab));
   if (tab === "engine" && !showAllEngines) list = list.filter((c) => c.fit !== "other-backend" || c.installed);
@@ -54,6 +83,9 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
   const meta = TABS.find((t) => t.id === tab)!;
   const inUse = tab === "llm" || tab === "image" || tab === "video" || tab === "stt" ? cat?.active[tab] : null;
   const inUseName = items.find((c) => c.id === inUse)?.name;
+
+  // until the catalog arrives, don't draw the page with empty data ("Install (0 MB)", "Nothing here runs well")
+  if (!cat) return <PageLoading title="Models" subtitle="Download engines and AI models once. After that everything works offline." error={error} />;
 
   return (
     <div className="page">
@@ -65,6 +97,12 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
         <div className="banner error">
           <span>{error}</span>
           <button className="icon-btn" onClick={() => setError(null)}><X size={16} /></button>
+        </div>
+      )}
+      {notice && (
+        <div className="banner">
+          <span>{notice}</span>
+          <button className="icon-btn" onClick={() => setNotice(null)}><X size={16} /></button>
         </div>
       )}
 
@@ -83,18 +121,37 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
             </select>
           </div>
         </div>
-        <div className="setup-cta">
+        <div className={`setup-cta ${setupStarted && missing.length ? "running" : ""}`}>
           {missing.length === 0 && items.length > 0 ? (
             <div className="eyebrow ok"><Check size={14} /> Everything your PC needs is installed</div>
           ) : (
             <>
-              <div>
-                <h3>One-click setup</h3>
-                <p className="muted small">Installs the best engine and models for this PC: {missing.map((c) => c.name).join(", ") || "…"}.</p>
+              <div className="setup-cta-head">
+                <div>
+                  <h3>One-click setup</h3>
+                  <p className="muted small">
+                    {setupBusy ? "Downloading and installing. You can keep using the app; this page updates every second."
+                      : `Installs the best engine and models for this PC: ${missing.map((c) => c.name).join(", ") || "…"}.`}
+                  </p>
+                </div>
+                {setupBusy ? (
+                  <button className="btn big" onClick={pauseAll} disabled={cancelling}
+                    title="Stop the downloads and keep what was fetched; Resume continues from there">
+                    <Pause size={18} /> Pause all
+                  </button>
+                ) : (
+                  <button className="btn primary big" disabled={!missing.length || active || cancelling} onClick={() => act(() => post("/api/setup"))}>
+                    {active ? <Loader2 size={18} className="spin" /> : <Rocket size={18} />}{" "}
+                    {active ? "Installing…" : unfinished.length ? `Resume (${fmtSize(missingMB)})` : `Install (${fmtSize(missingMB)})`}
+                  </button>
+                )}
               </div>
-              <button className="btn primary big" disabled={!missing.length || active} onClick={() => act(() => post("/api/setup"))}>
-                {active ? <Loader2 size={18} className="spin" /> : <Rocket size={18} />} {active ? "Installing…" : `Install (${fmtSize(missingMB)})`}
-              </button>
+              {setupStarted && <SetupProgress items={setupItems} act={act} />}
+              {setupStarted && unfinished.length > 0 && (
+                <button className="link danger setup-cancel" onClick={cancelSetup} disabled={cancelling}>
+                  {cancelling ? <><Loader2 size={13} className="spin" /> Cancelling…</> : "Cancel setup and delete partial downloads"}
+                </button>
+              )}
             </>
           )}
         </div>
@@ -155,6 +212,88 @@ export default function Models({ sys }: { sys: SystemInfo | null }) {
   );
 }
 
+const BUSY = ["queued", "downloading", "extracting"];
+const MiB = 1024 * 1024;
+
+function fmtEta(secs: number): string {
+  if (!isFinite(secs) || secs <= 0) return "";
+  if (secs < 60) return "less than a minute left";
+  const m = Math.ceil(secs / 60);
+  return m < 60 ? `about ${m} min left` : `about ${Math.floor(m / 60)} h ${m % 60} min left`;
+}
+
+/** Overall and per-item progress of one-click setup (the downloads run in parallel on the backend). */
+function SetupProgress({ items, act }: { items: Component[]; act: (fn: () => Promise<unknown>) => void }) {
+  const rows = items.map((c) => {
+    const d = c.download;
+    const total = d?.total || c.download_mb * MiB;
+    const done = !d ? 0 : d.status === "done" ? total : Math.min(d.done, total);
+    return { c, d, total, done };
+  });
+  const total = rows.reduce((n, r) => n + r.total, 0);
+  const done = rows.reduce((n, r) => n + r.done, 0);
+  const speed = rows.reduce((n, r) => n + (r.d?.status === "downloading" ? r.d.speed : 0), 0);
+  const pct = total ? Math.min(100, (done / total) * 100) : 0;
+  const finished = rows.filter((r) => r.c.installed).length;
+  const failed = rows.filter((r) => r.d?.status === "error").length;
+  const unpacking = rows.some((r) => r.d?.status === "extracting");
+
+  return (
+    <div className="setup-progress">
+      <div className="row between wrap">
+        <strong>{Math.floor(pct)}%</strong>
+        <span className="muted small">
+          {fmtMB(done)} of {fmtMB(total)}
+          {speed > 0 && <> · {fmtMB(speed)}/s · {fmtEta((total - done) / speed)}</>}
+          {unpacking && speed === 0 && <> · unpacking…</>}
+        </span>
+      </div>
+      <div className="bar big" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.floor(pct)}>
+        <div style={{ width: `${pct}%` }} />
+      </div>
+      <div className="muted tiny">
+        {finished} of {rows.length} installed{failed ? ` · ${failed} failed (press Resume to try again)` : ""}
+      </div>
+      <ul className="setup-items">
+        {rows.map(({ c, d, total, done }) => {
+          const p = total ? Math.min(100, (done / total) * 100) : 0;
+          let icon = <Loader2 size={14} className="spin" />;
+          let text = "Starting…";
+          if (c.installed) { icon = <Check size={14} className="ok" />; text = "Installed"; }
+          else if (!d) { icon = <Download size={14} className="muted" />; text = "Not started"; }
+          else if (d.status === "error") { icon = <X size={14} className="bad" />; text = d.error || "Failed"; }
+          else if (d.status === "cancelled") { icon = <Pause size={14} className="muted" />; text = `Paused at ${fmtMB(done)}`; }
+          else if (d.stopping) text = d.status === "extracting" ? "Pausing after unpacking…" : "Pausing…";
+          else if (d.status === "extracting") text = "Unpacking…";
+          else if (d.status === "downloading") text = `${fmtMB(done)} of ${fmtMB(total)}${d.speed ? ` · ${fmtMB(d.speed)}/s` : ""}`;
+          const running = !!d && BUSY.includes(d.status);
+          return (
+            <li key={c.id} className={d?.status === "error" ? "failed" : ""}>
+              <span className="setup-item-icon">{icon}</span>
+              <span className="setup-item-name" title={c.name}>{c.name}</span>
+              <div className="bar"><div style={{ width: `${c.installed ? 100 : p}%` }} /></div>
+              <span className="setup-item-state tiny muted" title={text}>{text}</span>
+              <span className="setup-item-act">
+                {c.installed ? null : running ? (
+                  <button className="icon-btn" disabled={!!d?.stopping} title={d?.stopping ? "Pausing…" : "Pause this download"}
+                    onClick={() => act(() => post(`/api/catalog/${c.id}/cancel`))}>
+                    {d?.stopping ? <Loader2 size={14} className="spin" /> : <Pause size={14} />}
+                  </button>
+                ) : (
+                  <button className="icon-btn" title={d ? "Resume this download" : "Start this download"}
+                    onClick={() => act(() => post(`/api/catalog/${c.id}/install`))}>
+                    <Play size={14} />
+                  </button>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function confirmDownload(c: Component): boolean {
   const size = fmtSize(c.download_mb);
   if (c.fit === "too-big") return confirm(`${c.name} probably won't run on this PC.\n${c.reason}\n\nDownload ${size} anyway?`);
@@ -201,8 +340,14 @@ function ModelRow({ c, recommended, inUse, act }: {
           <div className="dl">
             <div className="bar"><div style={{ width: `${pct}%` }} /></div>
             <div className="muted tiny">
-              {d.status === "extracting" ? "Unpacking…" : d.status === "queued" ? "Starting…" : `${fmtMB(d.done)} of ${fmtMB(d.total)} · ${fmtMB(d.speed)}/s · ${d.file}`}
+              {d.stopping ? "Pausing…" : d.status === "extracting" ? "Unpacking…" : d.status === "queued" ? "Starting…" : `${fmtMB(d.done)} of ${fmtMB(d.total)} · ${fmtMB(d.speed)}/s · ${d.file}`}
             </div>
+          </div>
+        )}
+        {d?.status === "cancelled" && (
+          <div className="dl">
+            <div className="bar paused"><div style={{ width: `${pct}%` }} /></div>
+            <div className="muted tiny">Paused at {fmtMB(d.done)} of {fmtMB(d.total)}. Resume continues from here.</div>
           </div>
         )}
         {d?.status === "error" && <div className="err tiny">{d.error}</div>}
@@ -224,12 +369,22 @@ function ModelRow({ c, recommended, inUse, act }: {
             )}
           </>
         ) : busy ? (
-          <button className="btn small" onClick={() => act(() => post(`/api/catalog/${c.id}/cancel`))}><X size={14} /> Pause</button>
+          <button className="btn small" disabled={!!d?.stopping} onClick={() => act(() => post(`/api/catalog/${c.id}/cancel`))}>
+            {d?.stopping ? <><Loader2 size={14} className="spin" /> Pausing…</> : <><Pause size={14} /> Pause</>}
+          </button>
         ) : (
           <>
             <button className="btn small" onClick={() => confirmDownload(c) && act(() => post(`/api/catalog/${c.id}/install`))}>
               <Download size={14} /> {d?.status === "cancelled" || d?.status === "error" ? "Resume" : "Download"}
             </button>
+            {(d?.status === "cancelled" || d?.status === "error") && (
+              <button className="icon-btn" title="Delete the partial download" onClick={() => {
+                if (confirm(`Delete the partial download of ${c.name} (${fmtMB(d.done)})?\n\nYou would have to download it again from the start.`))
+                  act(() => post(`/api/catalog/${c.id}/discard`));
+              }}>
+                <Trash2 size={15} />
+              </button>
+            )}
             {c.custom && (
               <button className="icon-btn" title="Take off the list" onClick={() => act(() => api(`/api/catalog/${c.id}`, { method: "DELETE" }))}>
                 <X size={15} />

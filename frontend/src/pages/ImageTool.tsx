@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Clapperboard, Download, FolderOpen, ImagePlus, RotateCcw, Trash2, Wand2, X } from "lucide-react";
-import { api, post, save, store, type Creation, type ToolOptions } from "../api";
-import { JobProgress, Segmented, ago, fmtSecs, useJob } from "../components/ToolKit";
+import { api, fmtAbout, post, save, store, type Creation, type Estimates, type ToolOptions } from "../api";
+import { JobProgress, PageLoading, Segmented, ago, ctrlEnter, fmtSecs, useJob } from "../components/ToolKit";
 import { STYLES } from "./Studio";
 
 type Form = { prompt: string; negative: string; model: string; aspect: string; style: string; count: number; seed: string };
@@ -21,10 +21,14 @@ export default function ImageTool({ goModels, onAnimate, canAnimate }: {
   const [items, setItems] = useState<Creation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Creation | null>(null);
+  const [est, setEst] = useState<Estimates | null>(null);   // this PC's timings (refreshed after each run)
   // a job started before you left this page is picked up again; its pictures appear when it finishes
   const { job, running, run, cancel } = useJob("image", (f) => { if (f.status === "error") setError(f.error); load(); });
 
-  const load = () => api<Creation[]>("/api/creations/image").then(setItems).catch(() => {});
+  const load = () => {
+    api<Creation[]>("/api/creations/image").then(setItems).catch(() => {});
+    api<Estimates>("/api/estimates").then(setEst).catch(() => {});
+  };
   useEffect(() => {
     api<ToolOptions>("/api/tools/options").then(setOpts).catch((e) => setError(e.message));
     load();
@@ -57,7 +61,8 @@ export default function ImageTool({ goModels, onAnimate, canAnimate }: {
   const reuse = (c: Creation) => set({ prompt: c.prompt || "", negative: c.negative || "", model: c.model || "",
     aspect: c.aspect || "portrait", style: c.style || "none", seed: String(c.seed ?? "") });
 
-  if (opts && !opts.image_models.length) {
+  if (!opts) return <PageLoading title="Image" subtitle="Describe a picture and your PC paints it. Nothing leaves your computer." error={error} />;
+  if (!opts.image_models.length) {
     return (
       <div className="page">
         <header className="page-head"><h1>Image</h1></header>
@@ -83,7 +88,8 @@ export default function ImageTool({ goModels, onAnimate, canAnimate }: {
         <aside className="card tool-form">
           <label className="lbl">Describe the image</label>
           <textarea rows={5} value={form.prompt} placeholder="e.g. A tea garden in Assam at sunrise, mist over the hills"
-            onChange={(e) => set({ prompt: e.target.value })} />
+            onChange={(e) => set({ prompt: e.target.value })}
+            onKeyDown={ctrlEnter(generate, !!form.prompt.trim() && !!model && !running)} />
           {!form.prompt && (
             <div className="chips tight">
               {IDEAS.map((i) => <button key={i} className="chip" onClick={() => set({ prompt: i })}>{i.split(",")[0]}</button>)}
@@ -123,9 +129,12 @@ export default function ImageTool({ goModels, onAnimate, canAnimate }: {
           </details>
 
           {running ? <JobProgress job={job} onCancel={cancel} /> : (
-            <button className="btn primary big full" disabled={!form.prompt.trim() || !model} onClick={generate}>
+            <button className="btn primary big full" disabled={!form.prompt.trim() || !model} onClick={generate} title="Ctrl+Enter">
               <Wand2 size={18} /> Create {form.count > 1 ? `${form.count} images` : "image"}
             </button>
+          )}
+          {est?.picture_s != null && model === opts?.active.image && (
+            <p className="muted tiny">About {fmtAbout(est.picture_s).replace("about ", "")} per picture on this PC{form.count > 1 ? `, ${fmtAbout(est.picture_s * form.count)} for ${form.count}` : ""}.</p>
           )}
         </aside>
 

@@ -26,7 +26,7 @@ from .engines.tts import tts
 from .engines.stt import LANGUAGES as STT_LANGUAGES, stt
 from .jobs import GPU_LOCK, jobs
 from .recipes import topic_to_short as t2s
-from . import tools, updates
+from . import timings, tools, updates
 
 app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -127,12 +127,16 @@ def _component(c: catalog.Component, hw: dict) -> dict:
             "description": c.description, "size_mb": c.size_mb, "download_mb": c.download_mb(),
             "license": c.license, "backend": c.backend, "installed": c.is_installed(),
             "fit": fit, "reason": reason, "tags": c.tags, "studio": c.studio, "soon": c.soon,
-            "custom": c.custom, "url": c.meta.get("url"), "download": _task(c.id)}
+            "custom": c.custom, "url": c.meta.get("url"), "i2v": bool(c.meta.get("i2v")), "download": _task(c.id)}
 
 
 def _task(cid: str) -> dict | None:
     t = downloads.status(cid)
-    return {k: v for k, v in t.items() if k != "cancel"} if t else None
+    if not t:
+        return None
+    out = {k: v for k, v in t.items() if k != "cancel"}
+    out["stopping"] = bool(t["cancel"]) and t["status"] in ("queued", "downloading", "extracting")   # pausing
+    return out
 
 
 def _active(engine) -> str | None:
@@ -205,8 +209,25 @@ def add_custom_model(m: CustomModel) -> dict:
 
 @app.post("/api/catalog/{cid}/cancel")
 def cancel_install(cid: str) -> dict:
+    """Pause a download; Install resumes it from where it stopped."""
     downloads.cancel(cid)
     return {"ok": True}
+
+
+@app.post("/api/catalog/{cid}/discard")
+def discard_install(cid: str) -> dict:
+    """Cancel a download for good and delete what it had fetched so far."""
+    try:
+        comp = catalog.get(cid)
+    except KeyError:
+        raise HTTPException(404, "Unknown component")
+    try:
+        freed = downloads.discard(comp)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except TimeoutError as e:
+        raise HTTPException(409, str(e))
+    return {"ok": True, "freed_mb": round(freed / 1048576)}
 
 
 @app.delete("/api/catalog/{cid}")
@@ -291,6 +312,17 @@ def tts_preview(req: TTSPreview) -> Response:
 
 
 # ---------------------------------------------------------------- standalone tools
+@app.get("/api/estimates")
+def estimates() -> dict:
+    """Typical durations measured on this PC (timings.py), for "about N min" hints. None = never timed here."""
+    img = _active(image_engine)
+    vid = _active(video_engine)
+    return {"picture_s": timings.typical(f"image:{img}") if img else None,
+            "clip_s": {q: timings.typical(f"video:{vid}:{q}") if vid else None for q in ("fast", "best")},
+            "edit_still_s": timings.typical("edit:still"), "edit_ai_s": timings.typical("edit:ai"),
+            "assemble_s": timings.typical("assemble")}
+
+
 @app.get("/api/tools/options")
 def tool_options() -> dict:
     def models(category: str, engine) -> list[dict]:
