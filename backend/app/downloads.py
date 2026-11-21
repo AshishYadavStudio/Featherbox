@@ -82,7 +82,8 @@ class DownloadManager:
         """Cancel for good: stop the download and delete its partial and unfinished files. Returns bytes freed.
 
         Only files of a component that is not installed are touched, and never a file or folder that another
-        installed component also uses (e.g. a shared CUDA runtime or text encoder).
+        installed or still-downloading component also uses (e.g. a shared CUDA runtime or text encoder):
+        Windows can't delete a file another download is writing, and that download still needs it.
         """
         from .catalog import components
         if comp.is_installed():
@@ -93,26 +94,34 @@ class DownloadManager:
             th.join(wait_s)                  # unpacking finishes its current archive before it stops
             if th.is_alive():
                 raise TimeoutError(f"{comp.name} is still unpacking. Try again in a few seconds.")
+        busy = {cid for cid, t in self.tasks.items()
+                if cid != comp.id and t["status"] in ("queued", "downloading", "extracting")}
         keep_files, keep_dirs = set(), set()
         for c in components():
-            if c.id != comp.id and c.is_installed():
+            if c.id != comp.id and (c.is_installed() or c.id in busy):
                 keep_files |= {f.dest for f in c.files}
                 keep_dirs |= {f.extract_to for f in c.files if f.extract_to}
         freed = 0
 
         def drop(p: Path) -> None:
             nonlocal freed
-            if p.is_dir():
-                freed += sum(x.stat().st_size for x in p.rglob("*") if x.is_file())
-                shutil.rmtree(p, ignore_errors=True)
-            elif p.exists():
-                freed += p.stat().st_size
-                p.unlink(missing_ok=True)
+            try:
+                if p.is_dir():
+                    size = sum(x.stat().st_size for x in p.rglob("*") if x.is_file())
+                    shutil.rmtree(p)
+                elif p.exists():
+                    size = p.stat().st_size
+                    p.unlink()
+                else:
+                    return
+            except OSError:          # in use or locked: leave it, it's only a leftover
+                return
+            freed += size
 
         for f in comp.files:
-            dest = config.DATA / f.dest
-            drop(dest.with_name(dest.name + ".part"))                     # a half-fetched file
-            if f.dest not in keep_files:
+            if f.dest not in keep_files:                                   # shared with an installed/running one: keep
+                dest = config.DATA / f.dest
+                drop(dest.with_name(dest.name + ".part"))                 # a half-fetched file
                 drop(dest)                                                 # fetched, but the install never finished
             if f.extract_to and f.extract_to not in keep_dirs:
                 out = config.DATA / f.extract_to

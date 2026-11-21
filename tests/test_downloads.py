@@ -54,6 +54,38 @@ class Discard(unittest.TestCase):
         finally:
             other.marker.unlink(missing_ok=True)
 
+    def test_keeps_files_another_running_download_is_fetching(self):
+        """Two video models share the text encoder: discarding one must not delete the shared file the other
+        is still writing (on Windows that delete fails and stopped the whole clean-up)."""
+        shared = FileSpec("u", "models/test/encoder.gguf", 1)
+        other = comp("t-running", [shared])
+        mine = comp("t-mine2", [shared, FileSpec("u", "models/test/mine2.gguf", 1)])
+        write("models/test/encoder.gguf.part", 400)
+        write("models/test/mine2.gguf.part", 300)
+        self.dm.tasks[other.id] = {"id": other.id, "status": "downloading", "done": 400, "total": 1000, "cancel": False}
+        with mock.patch("app.catalog.components", return_value=[other, mine]):
+            freed = self.dm.discard(mine)
+        self.assertEqual(freed, 300)
+        self.assertTrue((config.DATA / "models/test/encoder.gguf.part").exists())
+        self.assertFalse((config.DATA / "models/test/mine2.gguf.part").exists())
+
+    def test_a_locked_file_does_not_stop_the_clean_up(self):
+        c = comp("t-locked", [FileSpec("u", "models/test/l1.gguf", 1), FileSpec("u", "models/test/l2.gguf", 1)])
+        write("models/test/l1.gguf.part", 100)
+        write("models/test/l2.gguf.part", 200)
+        real_unlink = type(config.DATA).unlink
+
+        def unlink(p, *a, **k):
+            if p.name == "l1.gguf.part":
+                raise PermissionError("in use")
+            return real_unlink(p, *a, **k)
+        with mock.patch("app.catalog.components", return_value=[c]), \
+                mock.patch.object(type(config.DATA), "unlink", unlink):
+            freed = self.dm.discard(c)
+        self.assertEqual(freed, 200)
+        self.assertFalse((config.DATA / "models/test/l2.gguf.part").exists())
+        (config.DATA / "models/test/l1.gguf.part").unlink()
+
     def test_refuses_installed_components(self):
         c = comp("t-installed", [FileSpec("u", "models/test/done.gguf", 1)])
         write("models/test/done.gguf", 10)
