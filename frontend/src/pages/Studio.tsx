@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, Loader2, Play, Plus, RefreshCw, Sparkles, Trash2, Volume2, Wand2, X } from "lucide-react";
-import { Detached, activeJob, api, post, save, store, waitForJob, type Job, type Script, type SystemInfo, type Voice } from "../api";
+import { Detached, activeJob, api, fmtAbout, post, renderEstimate, save, store, waitForJob, type Estimates, type Job, type RenderInfo, type Script, type SystemInfo, type Voice } from "../api";
 import MusicPicker from "../components/MusicPicker";
 import ProjectView from "../components/ProjectView";
 
@@ -240,6 +240,10 @@ function Editor({ script, setScript, look, setLook, voices, onBack, onRewrite, o
   const motion: Motion = videoReady ? look.motion : "still";
   const clips = motion === "all" ? script.scenes.length : motion === "hook" ? 1 : 0;
   const [previewing, setPreviewing] = useState(false);
+  const [est, setEst] = useState<Estimates | null>(null);
+  useEffect(() => { api<Estimates>("/api/estimates").then(setEst).catch(() => {}); }, []);
+  const total = renderEstimate(est, script.scenes.length, clips, videoQuality);
+  const clipTime = videoQuality === "best" ? est?.clip_s.best : est?.clip_s.fast;
   const words = script.scenes.reduce((n, s) => n + s.narration.split(/\s+/).filter(Boolean).length, 0);
   const estSeconds = Math.round(words / (script.language === "hindi" ? 2.1 : 2.4) / look.speed + script.scenes.length * 0.35);
   const hindi = script.language === "hindi";
@@ -338,7 +342,7 @@ function Editor({ script, setScript, look, setLook, voices, onBack, onRewrite, o
                   options={[["fast", "Fast clips"], ["best", "Best quality"]]} />
               </div>
             )}
-            <p className="muted tiny">{clips ? `${clips} AI clip${clips > 1 ? "s" : ""}: each one ${MOTION_TIME[videoQuality] ?? MOTION_TIME.fast}. You can animate single scenes later too.` : "The video model brings pictures to life. You can also animate single scenes after rendering."}</p>
+            <p className="muted tiny">{clips ? `${clips} AI clip${clips > 1 ? "s" : ""}: each one ${clipTime ? `takes ${fmtAbout(clipTime)} on this PC` : (MOTION_TIME[videoQuality] ?? MOTION_TIME.fast)}. You can animate single scenes later too.` : "The video model brings pictures to life. You can also animate single scenes after rendering."}</p>
           </>
         ) : (
           <p className="muted tiny">AI motion needs a video model. <button className="link" onClick={goModels}>Get one in Models → Video</button></p>
@@ -352,7 +356,11 @@ function Editor({ script, setScript, look, setLook, voices, onBack, onRewrite, o
         <button className="btn primary big full" disabled={!canRender} onClick={onRender}>
           <Play size={18} /> Make video
         </button>
-        <p className="muted small">On a 4 GB GPU expect about 40 s per scene picture{clips ? ", plus the AI clips" : ""}.</p>
+        <p className="muted small">
+          {total != null ? `On this PC: ${fmtAbout(total)} in all, from your recent videos.`
+            : est?.picture_s != null ? `On this PC: ${fmtAbout(est.picture_s)} per scene picture${clips ? ", plus the AI clips" : ""}.`
+            : `On a 4 GB GPU expect about 40 s per scene picture${clips ? ", plus the AI clips" : ""}.`}
+        </p>
       </aside>
     </div>
   );
@@ -365,16 +373,34 @@ function ProgressCard({ job, title, onCancel }: { job: Job; title: string; onCan
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   const elapsed = Math.round((now - start) / 1000);
   const pct = Math.round(job.progress * 100);
+  const info = job.info && "scenes" in job.info ? (job.info as RenderInfo) : null;
+  // the backend refreshes its estimate after every scene; count down smoothly in between
+  const left = info?.eta_s != null ? Math.max(0, info.eta_s - (now / 1000 - info.eta_at)) : null;
   return (
-    <div className="progress-card card">
+    <div className={`progress-card card ${info ? "with-scenes" : ""}`}>
       <div className="pulse"><Loader2 size={28} className="spin" /></div>
       <h2>{title}</h2>
       <p className="muted">{job.status === "queued" ? "Waiting for the GPU…" : job.stage}</p>
       <div className="bar big"><div style={{ width: `${pct}%` }} /></div>
       <div className="row between muted small">
-        <span>{pct}%</span>
+        <span>{pct}%{left != null ? ` · ${left < 60 ? "less than a minute" : fmtAbout(left)} left` : ""}</span>
         <span>{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} elapsed</span>
       </div>
+      {info && left == null && info.picture_s != null && (
+        <p className="muted tiny">Each picture takes {fmtAbout(info.picture_s)} on this PC. A time estimate appears after your first video.</p>
+      )}
+      {info && (
+        <div className="scene-strip">
+          {info.scenes.map((sc, i) => (
+            <div key={i} className={`scene-thumb ${sc.state}`} title={`Scene ${i + 1}${sc.moving ? " (AI motion)" : ""}`}>
+              {sc.image ? <img src={sc.image} alt={`Scene ${i + 1}`} /> : <span className="scene-num">{i + 1}</span>}
+              {(sc.state === "painting" || sc.state === "animating") && (
+                <span className="scene-busy"><Loader2 size={14} className="spin" />{sc.state === "animating" ? " Animating" : ""}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       <button className="btn ghost" onClick={onCancel}><X size={16} /> Cancel</button>
     </div>
   );

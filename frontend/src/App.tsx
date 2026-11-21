@@ -10,6 +10,8 @@ import VideoTool from "./pages/VideoTool";
 import VoiceTool from "./pages/VoiceTool";
 import TranscribeTool from "./pages/TranscribeTool";
 import { UpdateBanner } from "./components/Updates";
+import { JobStatus } from "./components/JobStatus";
+import { LaunchAnimation, shouldPlayLaunch } from "./components/LaunchAnimation";
 
 export type Page = "studio" | "image" | "video" | "voice" | "transcribe" | "chat" | "library" | "models";
 
@@ -33,6 +35,7 @@ export default function App() {
   const [sys, setSys] = useState<SystemInfo | null>(null);
   const [offline, setOffline] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [intro, setIntro] = useState(shouldPlayLaunch);   // the launch animation, once per window
 
   useEffect(() => save("featherbox.page", page), [page]);
 
@@ -48,11 +51,15 @@ export default function App() {
   }, []);
 
   // open a finished project in Studio's done view (Studio reads its state from localStorage on mount)
+  const [studioKey, setStudioKey] = useState(0);
   const openProject = (pid: string) => {
     save("featherbox.result", { project: pid });
     save("featherbox.stage", "done");
     setPage("studio");
+    setStudioKey((k) => k + 1);   // remount, so Studio re-reads that state even if it is already open
   };
+  // the sidebar's job status opens Studio after handing it a finished script or video: remount it too
+  const go = (p: Page) => { setPage(p); if (p === "studio") setStudioKey((k) => k + 1); };
 
   const hw = sys?.hardware;
   const gpu = hw?.gpus.find((g) => g.vram_mb) ?? hw?.gpus[0];
@@ -77,6 +84,7 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <JobStatus page={page} go={go} openProject={openProject} />
         <div className="hw-chip" title={hw ? `${hw.cpu}\n${hw.ram_gb} GB RAM` : ""}>
           <Cpu size={16} />
           <div>
@@ -94,7 +102,7 @@ export default function App() {
           <div className="banner error">Can't reach Featherbox. If you closed it from the tray icon, open it again from the Start menu.</div>
         )}
         <UpdateBanner onRestarting={setUpdating} />
-        {page === "studio" && <Studio sys={sys} goModels={() => setPage("models")} goLibrary={() => setPage("library")} />}
+        {page === "studio" && <Studio key={studioKey} sys={sys} goModels={() => setPage("models")} goLibrary={() => setPage("library")} />}
         {page === "image" && <ImageTool goModels={() => setPage("models")} canAnimate={!!sys?.video_ready}
           onAnimate={(ref) => { save("featherbox.videoStart", ref); setPage("video"); }} />}
         {page === "video" && <VideoTool goModels={() => setPage("models")} />}
@@ -104,6 +112,7 @@ export default function App() {
         {page === "chat" && <Chat sys={sys} goModels={() => setPage("models")} />}
         {page === "models" && <Models sys={sys} />}
       </main>
+      {intro && <LaunchAnimation onDone={() => setIntro(false)} />}
     </div>
   );
 }

@@ -34,6 +34,23 @@ def lang_for(voice: str) -> str:
     return _LANG_BY_PREFIX.get(voice[:1], "en-us")
 
 
+_ACCENT = {"a": "US", "b": "UK", "h": "Hindi", "e": "Spanish", "f": "French", "i": "Italian",
+           "p": "Brazilian Portuguese", "j": "Japanese", "z": "Chinese"}
+_GENDER = {"f": "female", "m": "male"}
+
+
+def label_for(voice: str) -> str:
+    """Friendly name for a voice: the curated label, else one built from Kokoro's id ("af_alloy" -> "Alloy — US female")."""
+    if voice in VOICE_LABELS:
+        return VOICE_LABELS[voice]
+    prefix, _, name = voice.partition("_")
+    if len(prefix) != 2 or not name:
+        return voice
+    who = " ".join(w for w in (_ACCENT.get(prefix[0], ""), _GENDER.get(prefix[1], "")) if w)
+    nice = name.replace("_", " ").title()
+    return f"{nice} — {who}" if who else nice
+
+
 class TTSEngine:
     def __init__(self) -> None:
         self._k = None
@@ -53,7 +70,7 @@ class TTSEngine:
     def voices(self) -> list[dict]:
         names = sorted(self._model().get_voices())
         ordered = [v for v in VOICE_LABELS if v in names] + [v for v in names if v not in VOICE_LABELS]
-        return [{"id": v, "label": VOICE_LABELS.get(v, v), "lang": lang_for(v)} for v in ordered]
+        return [{"id": v, "label": label_for(v), "lang": lang_for(v)} for v in ordered]
 
     def synth(self, text: str, voice: str = "af_heart", speed: float = 1.0) -> tuple[np.ndarray, int]:
         k = self._model()
