@@ -262,9 +262,14 @@ def _assemble(job: Job, d: Path, meta: dict) -> dict:
     t0 = time.monotonic()
     n = len(meta["scenes"])
     segs = [d / "segments" / f"seg_{i+1:02d}.mp4" for i in range(n)]
-    duration = sum(s["duration"] for s in meta["scenes"])
-    job.update(0.95, "Joining scenes")
-    video.concat(segs, d / "voice.mp4")
+    lengths = [s["duration"] for s in meta["scenes"]]
+    duration = video.join_plan(lengths)[2]
+    # Joining re-encodes (for the crossfades), so skip it when only the music changed
+    joined = [[s.name, s.stat().st_mtime_ns, s.stat().st_size] for s in segs] + [video.FADE]
+    if meta.get("joined") != joined or not (d / "voice.mp4").exists():
+        job.update(0.92, "Joining scenes")
+        video.concat(segs, d / "voice.mp4", lengths)
+        meta["joined"] = joined
     job.update(0.97, "Mixing music")
     track = music.resolve(meta["music"], meta.get("script", {}).get("tone"), duration, d,
                           seed=meta.get("music_seed", 1))

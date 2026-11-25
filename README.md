@@ -137,7 +137,7 @@ React UI (frontend/)  ──HTTP──▶  FastAPI backend (backend/app)
                                    │   ├─ stt.py        whisper.cpp `whisper-cli` (speech to text, CPU or CUDA)
                                    │   ├─ textrender.py HarfBuzz-shaped captions (Hindi renders correctly)
                                    │   ├─ music.py      built-in music moods (synthesised, no download) + your tracks
-                                   │   └─ video.py      FFmpeg: Ken Burns motion, captions, concat, music ducking
+                                   │   └─ video.py      camera moves, AI clip loops, captions, crossfades, music ducking
                                    └─ recipes/topic_to_short.py
 ```
 
@@ -255,9 +255,13 @@ With a Wan video model installed (Models → Video), scenes can move instead of 
   **Make still** to go back. Only that scene is rebuilt.
 - **Wan 2.2 TI2V 5B** animates the picture Z-Image painted (image-to-video), so the look stays the same.
   **Wan 2.1 T2V 1.3B** is lighter but makes the clip from the text prompt only.
-- How a clip is made: 33 frames at 480×832 (about 2 s), interpolated to 30 fps, upscaled to 1080×1920,
-  then played forwards and backwards (a seamless "ping-pong" loop), slowed 1.25× and repeated to fill the
-  voice line. Captions are burned in on top as usual.
+- How a clip is made: 33 frames at 480×832 (about 2 s), interpolated to 30 fps, upscaled to 1080×1920 and
+  lightly sharpened, then turned into a seamless loop that only plays forwards (its last half second
+  crossfades into its start), slowed 1.25× and repeated to fill the voice line. Captions are burned in on
+  top as usual.
+- **Still scenes** get a slow camera move (push in, pull out, pan or drift; six kinds, eased at both ends).
+  Frames are drawn with sub-pixel accuracy on all processor cores, so the motion glides instead of
+  stepping. Scenes are joined with a 0.25 s crossfade that falls in the pause after each voice line.
 - **Clip quality** (Studio → Motion, a global setting):
   - **Fast clips** (default) decode with the 22 MB TAEHV tiny decoder (MIT, `taew2_2` / `taew2_1`).
     Slightly softer detail; the first frame still matches the painted picture.
