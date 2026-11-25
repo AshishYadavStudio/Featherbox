@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 
 APP_NAME = "Featherbox"
-APP_VERSION = "0.3.5"
+APP_VERSION = "0.3.6"
 
 
 def _env(name: str, default: str) -> str:
